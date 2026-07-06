@@ -989,6 +989,11 @@ components:
           type: number
         onTimeDeliveryRate:
           type: number
+        agentActivity:
+          type: array
+          description: Live status of the 5 autonomous AI agents
+          items:
+            $ref: "#/components/schemas/AgentStatus"
 
     SpendTrend:
       type: object

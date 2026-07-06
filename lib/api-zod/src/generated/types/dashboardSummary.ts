@@ -5,6 +5,7 @@
  * VendorIQ Procurement Intelligence API
  * OpenAPI spec version: 0.2.0
  */
+import type { AgentStatus } from './agentStatus';
 
 export interface DashboardSummary {
   /** Total procurement spend YTD in USD */
@@ -21,4 +22,6 @@ export interface DashboardSummary {
   predictedSavings: number;
   avgRiskScore: number;
   onTimeDeliveryRate: number;
+  /** Live status of the 5 autonomous AI agents */
+  agentActivity?: AgentStatus[];
 }

@@ -18,6 +18,40 @@ export interface CurrentUser {
   avatarInitials?: string;
 }
 
+export type AgentStatusType = typeof AgentStatusType[keyof typeof AgentStatusType];
+
+
+export const AgentStatusType = {
+  risk_analyst: 'risk_analyst',
+  price_forecaster: 'price_forecaster',
+  contract_analyst: 'contract_analyst',
+  fraud_investigator: 'fraud_investigator',
+  procurement_copilot: 'procurement_copilot',
+} as const;
+
+export type AgentStatusStatus = typeof AgentStatusStatus[keyof typeof AgentStatusStatus];
+
+
+export const AgentStatusStatus = {
+  idle: 'idle',
+  running: 'running',
+  error: 'error',
+} as const;
+
+export interface AgentStatus {
+  id: string;
+  name: string;
+  type: AgentStatusType;
+  status: AgentStatusStatus;
+  /** @nullable */
+  lastRun: string | null;
+  tasksCompleted: number;
+  /** @nullable */
+  currentTask?: string | null;
+  /** @nullable */
+  avgResponseMs?: number | null;
+}
+
 export interface DashboardSummary {
   /** Total procurement spend YTD in USD */
   totalSpend: number;
@@ -33,6 +67,8 @@ export interface DashboardSummary {
   predictedSavings: number;
   avgRiskScore: number;
   onTimeDeliveryRate: number;
+  /** Live status of the 5 autonomous AI agents */
+  agentActivity?: AgentStatus[];
 }
 
 export interface SpendTrend {
@@ -768,40 +804,6 @@ export interface SmartAlert {
   createdAt: string;
   /** @nullable */
   dismissedAt?: string | null;
-}
-
-export type AgentStatusType = typeof AgentStatusType[keyof typeof AgentStatusType];
-
-
-export const AgentStatusType = {
-  risk_analyst: 'risk_analyst',
-  price_forecaster: 'price_forecaster',
-  contract_analyst: 'contract_analyst',
-  fraud_investigator: 'fraud_investigator',
-  procurement_copilot: 'procurement_copilot',
-} as const;
-
-export type AgentStatusStatus = typeof AgentStatusStatus[keyof typeof AgentStatusStatus];
-
-
-export const AgentStatusStatus = {
-  idle: 'idle',
-  running: 'running',
-  error: 'error',
-} as const;
-
-export interface AgentStatus {
-  id: string;
-  name: string;
-  type: AgentStatusType;
-  status: AgentStatusStatus;
-  /** @nullable */
-  lastRun: string | null;
-  tasksCompleted: number;
-  /** @nullable */
-  currentTask?: string | null;
-  /** @nullable */
-  avgResponseMs?: number | null;
 }
 
 /**

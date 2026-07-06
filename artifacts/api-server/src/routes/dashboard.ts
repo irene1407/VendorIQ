@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { AGENTS } from "../lib/agentStore";
 
 const router = Router();
 
@@ -13,6 +14,7 @@ router.get("/dashboard/summary", (_req, res) => {
     predictedSavings: 23_800_000,
     avgRiskScore: 34.7,
     onTimeDeliveryRate: 0.924,
+    agentActivity: Object.values(AGENTS),
   });
 });
 

@@ -1,12 +1,21 @@
 import { useGetDashboardSummary, useGetSpendTrends, useGetSupplierLeaderboard, useGetRiskHeatmap } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from "recharts";
-import { Users, ShieldAlert, TrendingDown, DollarSign, Activity, Truck, AlertTriangle } from "lucide-react";
+import { Users, ShieldAlert, TrendingDown, DollarSign, Activity, Truck, AlertTriangle, Bot, ShieldCheck, TrendingUp, FileText, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+const AGENT_ICON: Record<string, React.ReactNode> = {
+  risk_analyst:       <ShieldCheck className="h-4 w-4 text-destructive" />,
+  price_forecaster:   <TrendingUp className="h-4 w-4 text-primary" />,
+  contract_analyst:   <FileText className="h-4 w-4 text-blue-400" />,
+  fraud_investigator: <AlertTriangle className="h-4 w-4 text-amber-400" />,
+  procurement_copilot:<Sparkles className="h-4 w-4 text-emerald-400" />,
+};
 
 function AnimatedCounter({ value, prefix = "", suffix = "", formatter = (v: number) => v.toString() }: { value: number, prefix?: string, suffix?: string, formatter?: (v: number) => string }) {
   // Simplistic animation approach for demonstration
@@ -14,7 +23,9 @@ function AnimatedCounter({ value, prefix = "", suffix = "", formatter = (v: numb
 }
 
 export default function Dashboard() {
-  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary();
+  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary({
+    query: { refetchInterval: 5000 },
+  });
   const { data: trends, isLoading: isTrendsLoading } = useGetSpendTrends({ months: 6 });
   const { data: leaderboard, isLoading: isLeaderboardLoading } = useGetSupplierLeaderboard({ limit: 5 });
   const { data: heatmap, isLoading: isHeatmapLoading } = useGetRiskHeatmap();
@@ -277,6 +288,57 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-card/50 backdrop-blur border-border/10">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>AI Agent Activity</CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {summary?.agentActivity?.filter((a) => a.status === "running").length ?? 0} of{" "}
+            {summary?.agentActivity?.length ?? 5} running
+          </span>
+        </CardHeader>
+        <CardContent>
+          {isSummaryLoading ? (
+            <div className="grid gap-3 md:grid-cols-5">
+              {Array(5).fill(0).map((_, i) => (
+                <div key={i} className="h-20 bg-muted/20 animate-pulse rounded-md" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-5">
+              {summary?.agentActivity?.map((agent) => (
+                <div
+                  key={agent.id}
+                  className={`p-3 rounded-lg border text-xs flex flex-col gap-1.5 ${
+                    agent.status === "running"
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border/10 bg-muted/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    {AGENT_ICON[agent.type] ?? <Bot className="h-4 w-4 text-muted-foreground" />}
+                    <Badge
+                      variant={agent.status === "running" ? "default" : "outline"}
+                      className="text-[9px] px-1.5 py-0"
+                    >
+                      {agent.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="font-medium text-foreground truncate">{agent.name}</div>
+                  <div className="text-[10px] text-muted-foreground font-mono">
+                    {agent.tasksCompleted.toLocaleString()} tasks
+                  </div>
+                  {agent.status === "running" && agent.currentTask && (
+                    <div className="text-[10px] text-primary/80 italic truncate">
+                      {agent.currentTask}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

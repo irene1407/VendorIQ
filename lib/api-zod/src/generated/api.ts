@@ -41,7 +41,17 @@ export const GetDashboardSummaryResponse = zod.object({
   "contractsExpiringSoon": zod.number(),
   "predictedSavings": zod.number(),
   "avgRiskScore": zod.number(),
-  "onTimeDeliveryRate": zod.number()
+  "onTimeDeliveryRate": zod.number(),
+  "agentActivity": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['risk_analyst', 'price_forecaster', 'contract_analyst', 'fraud_investigator', 'procurement_copilot']),
+  "status": zod.enum(['idle', 'running', 'error']),
+  "lastRun": zod.string().nullable(),
+  "tasksCompleted": zod.number(),
+  "currentTask": zod.string().nullish(),
+  "avgResponseMs": zod.number().nullish()
+})).optional().describe('Live status of the 5 autonomous AI agents')
 })
 
 
