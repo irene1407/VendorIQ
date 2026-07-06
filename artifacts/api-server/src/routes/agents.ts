@@ -14,21 +14,31 @@ router.get("/agents/status", (_req, res) => {
 });
 
 const CANNED_RESPONSES: Record<string, string> = {
-  default: "Based on current procurement data, I've analysed your query across 342 active suppliers. Here are my findings:",
+  default: "Based on current procurement data, I've analysed your query across 342 active suppliers. Here's what stands out: spend is trending 3.2% below last year (₹84.7Cr YTD), 18 entities are flagged high-risk and need review, and our models project ₹2.4Cr in additional savings this quarter. Ask me about a specific supplier, risk factor, contract, or market trend for more detail.",
   risk: "Our Risk Analyst has scored this supplier at 78.4/100 (High). The primary drivers are payment delays (SHAP: +18.4) and geopolitical concentration in high-risk regions (+14.2). I recommend reviewing the contract and qualifying alternative sources.",
   supplier: "I found 12 suppliers matching your criteria. The top performers by on-time delivery rate are: Siemens AG (98.1%), Infosys (97.3%), and DHL Supply Chain (96.8%). All three are in the low-risk tier.",
   fraud: "No active fraud investigations match this query. However, I've flagged 2 suppliers in this category that warrant monitoring: Global Procurement Partners (shell company indicators) and Meridian Supplies (duplicate invoice pattern).",
   contract: "I've identified 12 contracts expiring in the next 90 days with a combined value of ₹2,357Cr. The highest-priority renewal is the Samsung Electronics MSA (₹373Cr) expiring Jan 2026. Shall I draft a renewal recommendation?",
   savings: "Based on your current supplier portfolio, our models project ₹197Cr in savings this year: ₹69.7Cr from risk-based supplier switching, ₹35.7Cr from fraud prevention, and ₹92Cr from process automation.",
+  forecast: "Lithium carbonate prices are forecast to rise 12.4% over the next 90 days, driven by supply constraints in the APAC region. Copper and aluminum remain range-bound. I recommend locking in forward contracts for lithium-dependent categories before the projected spike in week 6.",
+  news: "In the last 30 days, sentiment across your supplier base is 68% neutral, 21% positive, and 11% negative. The most notable negative event was a labor dispute at a Foxconn facility, which may affect electronics component lead times.",
+  graph: "Your procurement knowledge graph currently tracks 342 suppliers, 1,204 contracts, and 87 commodity nodes. The most connected entity is Samsung Electronics, linked to 14 active contracts and 6 risk alerts.",
+  simulate: "Running that scenario against current data: switching 15% of high-risk APAC suppliers to alternative low-risk vendors would reduce portfolio risk exposure by an estimated 22% while adding ₹4.1Cr in one-time transition costs.",
+  greeting: "Hello! I'm your Procurement Copilot, connected to all supplier, risk, contract, and market data. Try asking me about supplier risk, expiring contracts, fraud alerts, price forecasts, or potential savings.",
 };
 
 function selectResponse(message: string): string {
   const m = message.toLowerCase();
+  if (/^(hi|hey|hello|yo)\b/.test(m.trim())) return CANNED_RESPONSES.greeting;
   if (m.includes("risk") || m.includes("score")) return CANNED_RESPONSES.risk;
-  if (m.includes("supplier") || m.includes("deliver") || m.includes("late")) return CANNED_RESPONSES.supplier;
   if (m.includes("fraud") || m.includes("suspicious")) return CANNED_RESPONSES.fraud;
   if (m.includes("contract") || m.includes("expir")) return CANNED_RESPONSES.contract;
-  if (m.includes("savings") || m.includes("cost") || m.includes("money")) return CANNED_RESPONSES.savings;
+  if (m.includes("savings") || m.includes("cost") || m.includes("money") || m.includes("save")) return CANNED_RESPONSES.savings;
+  if (m.includes("forecast") || m.includes("price") || m.includes("commodity") || m.includes("lithium") || m.includes("aluminum") || m.includes("copper")) return CANNED_RESPONSES.forecast;
+  if (m.includes("news") || m.includes("sentiment") || m.includes("event")) return CANNED_RESPONSES.news;
+  if (m.includes("graph") || m.includes("network") || m.includes("connect")) return CANNED_RESPONSES.graph;
+  if (m.includes("simulat") || m.includes("what if") || m.includes("what-if") || m.includes("scenario")) return CANNED_RESPONSES.simulate;
+  if (m.includes("supplier") || m.includes("deliver") || m.includes("late") || m.includes("vendor")) return CANNED_RESPONSES.supplier;
   return CANNED_RESPONSES.default;
 }
 
