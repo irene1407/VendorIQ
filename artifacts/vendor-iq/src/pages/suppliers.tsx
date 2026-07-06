@@ -1,16 +1,54 @@
-import { useListSuppliers, SupplierRiskLevel } from "@workspace/api-client-react";
+import { useListSuppliers, useCreateSupplier, SupplierRiskLevel, getListSuppliersQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import { Search, Plus, Filter, Map as MapIcon, Table as TableIcon } from "lucide-react";
+import { Search, Plus, Filter, Map as MapIcon, Table as TableIcon, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+const emptyForm = { name: "", country: "", category: "", website: "", contactEmail: "" };
 
 export default function Suppliers() {
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'table' | 'map'>('table');
   const { data, isLoading } = useListSuppliers({ page, limit: 20 });
+
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const createMutation = useCreateSupplier();
+
+  const handleCreate = () => {
+    if (!form.name || !form.country || !form.category) return;
+    createMutation.mutate(
+      {
+        data: {
+          name: form.name,
+          country: form.country,
+          category: form.category,
+          website: form.website || null,
+          contactEmail: form.contactEmail || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(`${form.name} added to supplier registry`);
+          queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
+          setForm(emptyForm);
+          setAddOpen(false);
+        },
+        onError: () => {
+          toast.error("Failed to add supplier");
+        },
+      }
+    );
+  };
 
   const getRiskColor = (level: SupplierRiskLevel) => {
     switch(level) {
@@ -38,9 +76,79 @@ export default function Suppliers() {
               <MapIcon className="h-4 w-4 mr-2" /> Map
             </Button>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" /> Add Supplier
-          </Button>
+          <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setForm(emptyForm); }}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" /> Add Supplier
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Supplier</DialogTitle>
+                <DialogDescription>Onboard a new supplier into the registry for risk scoring and monitoring.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="supplier-name">Supplier Name *</Label>
+                  <Input
+                    id="supplier-name"
+                    placeholder="e.g. Acme Manufacturing"
+                    value={form.name}
+                    onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="supplier-country">Country *</Label>
+                    <Input
+                      id="supplier-country"
+                      placeholder="e.g. Germany"
+                      value={form.country}
+                      onChange={(e) => setForm(f => ({ ...f, country: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supplier-category">Category *</Label>
+                    <Input
+                      id="supplier-category"
+                      placeholder="e.g. Electronics"
+                      value={form.category}
+                      onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supplier-email">Contact Email</Label>
+                  <Input
+                    id="supplier-email"
+                    type="email"
+                    placeholder="procurement@supplier.com"
+                    value={form.contactEmail}
+                    onChange={(e) => setForm(f => ({ ...f, contactEmail: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supplier-website">Website</Label>
+                  <Input
+                    id="supplier-website"
+                    placeholder="https://supplier.com"
+                    value={form.website}
+                    onChange={(e) => setForm(f => ({ ...f, website: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={!form.name || !form.country || !form.category || createMutation.isPending}
+                >
+                  {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Add Supplier
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

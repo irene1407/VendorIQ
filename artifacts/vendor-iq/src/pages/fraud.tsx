@@ -27,7 +27,7 @@ export default function Fraud() {
     );
   };
 
-  const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
+  const COLORS = ['#A7C7E7', '#F7C6C7', '#B8E0D2', '#F4E1A1', '#D6C6E1', '#F5C9A8', '#C9E4C5'];
 
   const getSeverityColor = (severity: string) => {
     switch(severity) {
