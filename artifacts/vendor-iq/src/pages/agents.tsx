@@ -86,13 +86,25 @@ export default function Agents() {
     },
   });
 
-  const { mutate: runAgent } = useRunAgent({
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const { mutate: runAgent, isPending: isStartingAgent, variables: startingVars } = useRunAgent({
     mutation: {
-      onSuccess() {
-        // Refresh agent status list immediately after triggering
+      onSuccess(data) {
+        setRunError(null);
+        // Seed the cache immediately so the UI flips to "running" without
+        // waiting for the next 5s poll, then invalidate to resync with the server.
+        queryClient.setQueryData(
+          getListAgentStatusesQueryKey(),
+          (old: typeof agents) =>
+            old?.map((a) => (a.id === data.id ? { ...a, ...data } : a)),
+        );
         queryClient.invalidateQueries({
           queryKey: getListAgentStatusesQueryKey(),
         });
+      },
+      onError() {
+        setRunError("Couldn't start the agent — please try again.");
       },
     },
   });
@@ -101,18 +113,27 @@ export default function Agents() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isQuerying]);
 
+  const buildHistory = () =>
+    messages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+
   const handleQuery = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = query.trim();
     if (!trimmed || isQuerying) return;
+    const history = buildHistory();
     setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
     setQuery("");
-    sendQuery({ data: { message: trimmed, agentType: "procurement_copilot" } });
+    sendQuery({
+      data: { message: trimmed, agentType: "procurement_copilot", context: { history } },
+    });
   };
 
   const handleChip = (text: string) => {
+    const history = buildHistory();
     setMessages((prev) => [...prev, { role: "user", content: text }]);
-    sendQuery({ data: { message: text, agentType: "procurement_copilot" } });
+    sendQuery({
+      data: { message: text, agentType: "procurement_copilot", context: { history } },
+    });
   };
 
   return (
@@ -188,15 +209,33 @@ export default function Agents() {
 
                     {/* Run button for idle agents */}
                     {isIdle && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-auto h-7 text-xs gap-1 border-border/30 hover:border-primary/50 hover:bg-primary/10"
-                        onClick={() => runAgent({ agentId: agent.id })}
-                      >
-                        <Play className="h-3 w-3" />
-                        Run now
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-auto h-7 text-xs gap-1 border-border/30 hover:border-primary/50 hover:bg-primary/10 disabled:opacity-60"
+                          disabled={isStartingAgent && startingVars?.agentId === agent.id}
+                          onClick={() => {
+                            setRunError(null);
+                            runAgent({ agentId: agent.id });
+                          }}
+                        >
+                          {isStartingAgent && startingVars?.agentId === agent.id ? (
+                            <>
+                              <div className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-3 w-3" />
+                              Run now
+                            </>
+                          )}
+                        </Button>
+                        {runError && startingVars?.agentId === agent.id && (
+                          <div className="text-[10px] text-destructive mt-1">{runError}</div>
+                        )}
+                      </>
                     )}
                   </CardContent>
                 </Card>

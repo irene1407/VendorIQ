@@ -91,10 +91,27 @@ router.post("/agents/:agentId/run", (req, res) => {
   return res.json({ ...base, ...state });
 });
 
+const FOLLOW_UP_HINTS = ["more", "elaborate", "explain", "why", "detail", "go on", "continue", "and", "also", "what about", "that one", "it"];
+
 router.post("/agents/query", (req, res) => {
-  const { message, agentType } = req.body as { message: string; agentType?: string };
+  const { message, agentType, context } = req.body as {
+    message: string;
+    agentType?: string;
+    context?: { history?: { role: "user" | "agent"; content: string }[] };
+  };
   const type = agentType ?? "procurement_copilot";
-  const responseText = selectResponse(message);
+
+  const history = context?.history ?? [];
+  const lastAgentTurn = [...history].reverse().find((h) => h.role === "agent");
+  const isFollowUp =
+    history.length > 0 &&
+    FOLLOW_UP_HINTS.some((hint) => message.toLowerCase().includes(hint)) &&
+    message.trim().split(/\s+/).length <= 6;
+
+  let responseText = selectResponse(message);
+  if (isFollowUp && lastAgentTurn) {
+    responseText = `Following up on that — ${responseText.charAt(0).toLowerCase()}${responseText.slice(1)}`;
+  }
 
   res.json({
     agentType: type,
