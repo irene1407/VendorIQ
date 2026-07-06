@@ -2,15 +2,30 @@ import { Router } from "express";
 
 const router = Router();
 
+type AgentStatusValue = "idle" | "running" | "error";
+
+interface AgentRecord {
+  id: string;
+  name: string;
+  type: string;
+  avgResponseMs: number;
+  status: AgentStatusValue;
+  currentTask: string | null;
+  tasksCompleted: number;
+  lastRun: string;
+}
+
+// Single in-memory source of truth for all agent state (resets on server restart — fine for a demo).
+const AGENTS: Record<string, AgentRecord> = {
+  "agent-risk": { id: "agent-risk", name: "Risk Analyst", type: "risk_analyst", avgResponseMs: 42, status: "idle", currentTask: null, tasksCompleted: 2841, lastRun: new Date(Date.now() - 3600000).toISOString() },
+  "agent-price": { id: "agent-price", name: "Price Forecaster", type: "price_forecaster", avgResponseMs: 187, status: "running", currentTask: "Updating lithium carbonate 90-day forecast", tasksCompleted: 428, lastRun: new Date().toISOString() },
+  "agent-contract": { id: "agent-contract", name: "Contract Analyst", type: "contract_analyst", avgResponseMs: 1840, status: "idle", currentTask: null, tasksCompleted: 73, lastRun: new Date(Date.now() - 7200000).toISOString() },
+  "agent-fraud": { id: "agent-fraud", name: "Fraud Investigator", type: "fraud_investigator", avgResponseMs: 28, status: "running", currentTask: "Analyzing bid pattern for RFP-2024-441", tasksCompleted: 5219, lastRun: new Date().toISOString() },
+  "agent-copilot": { id: "agent-copilot", name: "Procurement Copilot", type: "procurement_copilot", avgResponseMs: 680, status: "idle", currentTask: null, tasksCompleted: 847, lastRun: new Date(Date.now() - 1800000).toISOString() },
+};
+
 router.get("/agents/status", (_req, res) => {
-  const now = new Date().toISOString();
-  res.json([
-    { id: "agent-risk", name: "Risk Analyst", type: "risk_analyst", status: "idle", lastRun: new Date(Date.now() - 3600000).toISOString(), tasksCompleted: 2841, currentTask: null, avgResponseMs: 42 },
-    { id: "agent-price", name: "Price Forecaster", type: "price_forecaster", status: "running", lastRun: now, tasksCompleted: 428, currentTask: "Updating lithium carbonate 90-day forecast", avgResponseMs: 187 },
-    { id: "agent-contract", name: "Contract Analyst", type: "contract_analyst", status: "idle", lastRun: new Date(Date.now() - 7200000).toISOString(), tasksCompleted: 73, currentTask: null, avgResponseMs: 1840 },
-    { id: "agent-fraud", name: "Fraud Investigator", type: "fraud_investigator", status: "running", lastRun: now, tasksCompleted: 5219, currentTask: "Analyzing bid pattern for RFP-2024-441", avgResponseMs: 28 },
-    { id: "agent-copilot", name: "Procurement Copilot", type: "procurement_copilot", status: "idle", lastRun: new Date(Date.now() - 1800000).toISOString(), tasksCompleted: 847, currentTask: null, avgResponseMs: 680 },
-  ]);
+  res.json(Object.values(AGENTS));
 });
 
 const CANNED_RESPONSES: Record<string, string> = {
@@ -42,15 +57,6 @@ function selectResponse(message: string): string {
   return CANNED_RESPONSES.default;
 }
 
-// In-memory agent state (resets on server restart — fine for a demo)
-const agentState: Record<string, { status: "idle" | "running" | "error"; currentTask: string | null; tasksCompleted: number }> = {
-  "agent-risk":     { status: "idle",    currentTask: null, tasksCompleted: 2841 },
-  "agent-price":    { status: "running", currentTask: "Updating lithium carbonate 90-day forecast", tasksCompleted: 428 },
-  "agent-contract": { status: "idle",    currentTask: null, tasksCompleted: 73 },
-  "agent-fraud":    { status: "running", currentTask: "Analyzing bid pattern for RFP-2024-441", tasksCompleted: 5219 },
-  "agent-copilot":  { status: "idle",    currentTask: null, tasksCompleted: 847 },
-};
-
 const AGENT_TASKS: Record<string, string[]> = {
   "agent-risk":     ["Re-scoring supplier portfolio against latest ESG indices", "Running geopolitical concentration check for APAC suppliers", "Updating SHAP explainability report for top-10 high-risk vendors"],
   "agent-price":    ["Updating lithium carbonate 90-day forecast", "Fetching LME spot prices for copper and aluminum", "Retraining price model with last 30 days of actuals"],
@@ -61,34 +67,28 @@ const AGENT_TASKS: Record<string, string[]> = {
 
 router.post("/agents/:agentId/run", (req, res) => {
   const { agentId } = req.params;
-  const state = agentState[agentId];
-  if (!state) return res.status(404).json({ error: "Agent not found" });
+  const agent = AGENTS[agentId];
+  if (!agent) return res.status(404).json({ error: "Agent not found" });
 
   // Pick a random task for this agent type
   const tasks = AGENT_TASKS[agentId] ?? ["Processing tasks..."];
   const task = tasks[Math.floor(Math.random() * tasks.length)];
 
-  // Mark as running immediately
-  state.status = "running";
-  state.currentTask = task;
+  // Mark as running immediately — this mutates the same AGENTS record read by GET /agents/status,
+  // so polling clients see the running state consistently until the timeout below flips it back.
+  agent.status = "running";
+  agent.currentTask = task;
+  agent.lastRun = new Date().toISOString();
 
   // Simulate completion after 8–15 seconds
   const delay = 8000 + Math.floor(Math.random() * 7000);
   setTimeout(() => {
-    state.status = "idle";
-    state.currentTask = null;
-    state.tasksCompleted += 1;
+    agent.status = "idle";
+    agent.currentTask = null;
+    agent.tasksCompleted += 1;
   }, delay);
 
-  const baseAgents = [
-    { id: "agent-risk",     name: "Risk Analyst",         type: "risk_analyst",         lastRun: new Date().toISOString(), avgResponseMs: 42 },
-    { id: "agent-price",    name: "Price Forecaster",      type: "price_forecaster",     lastRun: new Date().toISOString(), avgResponseMs: 187 },
-    { id: "agent-contract", name: "Contract Analyst",      type: "contract_analyst",     lastRun: new Date().toISOString(), avgResponseMs: 1840 },
-    { id: "agent-fraud",    name: "Fraud Investigator",    type: "fraud_investigator",   lastRun: new Date().toISOString(), avgResponseMs: 28 },
-    { id: "agent-copilot",  name: "Procurement Copilot",   type: "procurement_copilot",  lastRun: new Date().toISOString(), avgResponseMs: 680 },
-  ];
-  const base = baseAgents.find(a => a.id === agentId)!;
-  return res.json({ ...base, ...state });
+  return res.json({ ...agent });
 });
 
 const FOLLOW_UP_HINTS = ["more", "elaborate", "explain", "why", "detail", "go on", "continue", "and", "also", "what about", "that one", "it"];
