@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 0.2.0
+  description: VendorIQ Procurement Intelligence API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: dashboard
+  - name: suppliers
+  - name: risk
+  - name: forecast
+  - name: fraud
+  - name: contracts
+  - name: graph
+  - name: news
+  - name: search
+  - name: monitoring
+  - name: experiments
+  - name: simulation
+  - name: savings
+  - name: alerts
+  - name: agents
+
 paths:
+  # ─── Health ───────────────────────────────────────────────
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +39,1913 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Auth ─────────────────────────────────────────────────
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Current logged-in user profile and status
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+
+  # ─── Dashboard ────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Executive KPI summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/spend-trends:
+    get:
+      operationId: getSpendTrends
+      tags: [dashboard]
+      summary: Monthly spend trends
+      parameters:
+        - in: query
+          name: months
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: Spend trend series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SpendTrend"
+
+  /dashboard/supplier-leaderboard:
+    get:
+      operationId: getSupplierLeaderboard
+      tags: [dashboard]
+      summary: Top-performing supplier leaderboard
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Ranked suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupplierRank"
+
+  /dashboard/risk-heatmap:
+    get:
+      operationId: getRiskHeatmap
+      tags: [dashboard]
+      summary: Geographic risk heatmap data
+      responses:
+        "200":
+          description: Risk heatmap
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskHeatmapPoint"
+
+  # ─── Suppliers ────────────────────────────────────────────
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List suppliers
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: country
+          schema:
+            type: ["string", "null"]
+        - in: query
+          name: riskLevel
+          schema:
+            type: ["string", "null"]
+            enum: [low, medium, high, critical, null]
+        - in: query
+          name: category
+          schema:
+            type: ["string", "null"]
+        - in: query
+          name: q
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Paginated suppliers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierPage"
+
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Register a new supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInput"
+      responses:
+        "201":
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    get:
+      operationId: getSupplier
+      tags: [suppliers]
+      summary: Get supplier by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Supplier detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierUpdate"
+      responses:
+        "200":
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    delete:
+      operationId: deleteSupplier
+      tags: [suppliers]
+      summary: Delete supplier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /suppliers/{id}/risk-history:
+    get:
+      operationId: getSupplierRiskHistory
+      tags: [suppliers, risk]
+      summary: Historical risk score trend for a supplier (last 90 days)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Risk score history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskHistoryPoint"
+
+  # ─── Risk ─────────────────────────────────────────────────
+  /risk/scores:
+    get:
+      operationId: listRiskScores
+      tags: [risk]
+      summary: Current risk scores for all suppliers
+      parameters:
+        - in: query
+          name: minScore
+          schema:
+            type: ["number", "null"]
+        - in: query
+          name: riskLevel
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Risk score list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskScore"
+
+  /risk/explain/{supplierId}:
+    get:
+      operationId: getRiskExplanation
+      tags: [risk]
+      summary: SHAP feature attribution for supplier risk score
+      parameters:
+        - in: path
+          name: supplierId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SHAP explanation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskExplanation"
+
+  /risk/counterfactuals/{supplierId}:
+    get:
+      operationId: getRiskCounterfactuals
+      tags: [risk]
+      summary: What changes would improve a supplier's score
+      parameters:
+        - in: path
+          name: supplierId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Counterfactual suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Counterfactual"
+
+  # ─── Forecast ─────────────────────────────────────────────
+  /forecast/commodities:
+    get:
+      operationId: listCommodityForecasts
+      tags: [forecast]
+      summary: Overview of all commodity price forecasts
+      responses:
+        "200":
+          description: Commodity forecast list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommodityForecast"
+
+  /forecast/{commodity}:
+    get:
+      operationId: getCommodityForecast
+      tags: [forecast]
+      summary: Detailed price forecast for a commodity (90-day horizon)
+      parameters:
+        - in: path
+          name: commodity
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Forecast series
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForecastSeries"
+
+  # ─── Fraud ────────────────────────────────────────────────
+  /fraud/alerts:
+    get:
+      operationId: listFraudAlerts
+      tags: [fraud]
+      summary: Active fraud alerts
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: ["string", "null"]
+            enum: [open, investigating, resolved, null]
+        - in: query
+          name: severity
+          schema:
+            type: ["string", "null"]
+            enum: [low, medium, high, critical, null]
+      responses:
+        "200":
+          description: Fraud alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FraudAlert"
+
+  /fraud/alerts/{id}/resolve:
+    post:
+      operationId: resolveFraudAlert
+      tags: [fraud]
+      summary: Mark fraud alert as resolved
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FraudResolution"
+      responses:
+        "200":
+          description: Updated alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FraudAlert"
+
+  /fraud/stats:
+    get:
+      operationId: getFraudStats
+      tags: [fraud]
+      summary: Fraud detection statistics
+      responses:
+        "200":
+          description: Fraud statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FraudStats"
+
+  # ─── Contracts ────────────────────────────────────────────
+  /contracts:
+    get:
+      operationId: listContracts
+      tags: [contracts]
+      summary: List analyzed contracts
+      parameters:
+        - in: query
+          name: supplierId
+          schema:
+            type: ["string", "null"]
+        - in: query
+          name: status
+          schema:
+            type: ["string", "null"]
+            enum: [active, expiring, expired, under_review, null]
+      responses:
+        "200":
+          description: Contract list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+
+    post:
+      operationId: analyzeContract
+      tags: [contracts]
+      summary: Upload and analyze a contract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractInput"
+      responses:
+        "201":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractDetail"
+
+  /contracts/{id}:
+    get:
+      operationId: getContract
+      tags: [contracts]
+      summary: Get full contract analysis
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Contract detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractDetail"
+
+  /contracts/{id}/clauses:
+    get:
+      operationId: getContractClauses
+      tags: [contracts]
+      summary: Extracted and classified clauses
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Clause list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContractClause"
+
+  # ─── Knowledge Graph ──────────────────────────────────────
+  /graph:
+    get:
+      operationId: getGraph
+      tags: [graph]
+      summary: Full procurement knowledge graph
+      parameters:
+        - in: query
+          name: nodeTypes
+          schema:
+            type: ["string", "null"]
+            description: Comma-separated node types to include
+      responses:
+        "200":
+          description: Graph data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphData"
+
+  /graph/neighbors/{nodeId}:
+    get:
+      operationId: getGraphNeighbors
+      tags: [graph]
+      summary: Immediate neighbors of a graph node
+      parameters:
+        - in: path
+          name: nodeId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Neighboring nodes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphData"
+
+  # ─── News ─────────────────────────────────────────────────
+  /news:
+    get:
+      operationId: listNews
+      tags: [news]
+      summary: Recent supplier-related news articles
+      parameters:
+        - in: query
+          name: sentiment
+          schema:
+            type: ["string", "null"]
+            enum: [positive, neutral, negative, null]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: News articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NewsArticle"
+
+  /news/supplier/{supplierId}:
+    get:
+      operationId: getSupplierNews
+      tags: [news]
+      summary: News articles for a specific supplier
+      parameters:
+        - in: path
+          name: supplierId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Supplier news
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NewsArticle"
+
+  /news/timeline:
+    get:
+      operationId: getNewsTimeline
+      tags: [news]
+      summary: Chronological news event timeline
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: News timeline
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NewsTimelineItem"
+
+  # ─── Search ───────────────────────────────────────────────
+  /search/semantic:
+    post:
+      operationId: semanticSearch
+      tags: [search]
+      summary: Natural language supplier search using embeddings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchQuery"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchResult"
+
+  /search/suggestions:
+    get:
+      operationId: getSearchSuggestions
+      tags: [search]
+      summary: Query autocomplete suggestions
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  # ─── Model Monitoring ─────────────────────────────────────
+  /monitoring/drift:
+    get:
+      operationId: listDriftMetrics
+      tags: [monitoring]
+      summary: Data and concept drift metrics
+      responses:
+        "200":
+          description: Drift metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriftMetric"
+
+  /monitoring/model-metrics:
+    get:
+      operationId: getModelMetrics
+      tags: [monitoring]
+      summary: Latency, error rate, and prediction volume by model
+      responses:
+        "200":
+          description: Model metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelMetrics"
+
+  /monitoring/prediction-volume:
+    get:
+      operationId: getPredictionVolume
+      tags: [monitoring]
+      summary: Prediction volume over time
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Volume time series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PredictionVolumePoint"
+
+  # ─── Experiments ──────────────────────────────────────────
+  /experiments:
+    get:
+      operationId: listExperiments
+      tags: [experiments]
+      summary: MLflow experiment runs
+      parameters:
+        - in: query
+          name: model
+          schema:
+            type: ["string", "null"]
+        - in: query
+          name: status
+          schema:
+            type: ["string", "null"]
+            enum: [running, finished, failed, null]
+      responses:
+        "200":
+          description: Experiment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Experiment"
+
+  /experiments/{id}:
+    get:
+      operationId: getExperiment
+      tags: [experiments]
+      summary: Experiment detail with metrics and artifacts
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentDetail"
+
+  # ─── Simulation ───────────────────────────────────────────
+  /simulate:
+    post:
+      operationId: runSimulation
+      tags: [simulation]
+      summary: What-if scenario simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationInput"
+      responses:
+        "200":
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+
+  # ─── Savings ──────────────────────────────────────────────
+  /savings/summary:
+    get:
+      operationId: getSavingsSummary
+      tags: [savings]
+      summary: Total estimated savings and business impact
+      responses:
+        "200":
+          description: Savings summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsSummary"
+
+  /savings/calculate:
+    post:
+      operationId: calculateSavings
+      tags: [savings]
+      summary: Project savings under custom assumptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsInput"
+      responses:
+        "200":
+          description: Savings projection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsProjection"
+
+  # ─── Alerts ───────────────────────────────────────────────
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: Smart alerts queue
+      parameters:
+        - in: query
+          name: read
+          schema:
+            type: ["boolean", "null"]
+        - in: query
+          name: type
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SmartAlert"
+
+  /alerts/{id}/read:
+    post:
+      operationId: markAlertRead
+      tags: [alerts]
+      summary: Mark alert as read
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartAlert"
+
+  /alerts/{id}/dismiss:
+    post:
+      operationId: dismissAlert
+      tags: [alerts]
+      summary: Dismiss alert
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Dismissed
+
+  # ─── Agents ───────────────────────────────────────────────
+  /agents/status:
+    get:
+      operationId: listAgentStatuses
+      tags: [agents]
+      summary: Status of all AI agents
+      responses:
+        "200":
+          description: Agent status list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentStatus"
+
+  /agents/{agentId}/run:
+    post:
+      operationId: runAgent
+      tags: [agents]
+      summary: Trigger an agent to run its next task cycle
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated agent status after triggering run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentStatus"
+        "404":
+          description: Agent not found
+
+  /agents/query:
+    post:
+      operationId: queryAgent
+      tags: [agents]
+      summary: Send natural-language query to Procurement Copilot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentQuery"
+      responses:
+        "200":
+          description: Agent response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentResponse"
+
+# ─── Components ─────────────────────────────────────────────
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # ── Auth ──
+    CurrentUser:
+      type: object
+      required: [id, name, role, company, online]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        company:
+          type: string
+        online:
+          type: boolean
+        avatarInitials:
+          type: string
+
+    # ── Dashboard ──
+    DashboardSummary:
+      type: object
+      required:
+        - totalSpend
+        - activeSuppliers
+        - highRiskSuppliers
+        - fraudAlertsOpen
+        - contractsExpiringSoon
+        - predictedSavings
+        - avgRiskScore
+        - onTimeDeliveryRate
+      properties:
+        totalSpend:
+          type: number
+          description: Total procurement spend YTD in USD
+        totalSpendChange:
+          type: ["number", "null"]
+          description: MoM percentage change
+        activeSuppliers:
+          type: integer
+        highRiskSuppliers:
+          type: integer
+        fraudAlertsOpen:
+          type: integer
+        contractsExpiringSoon:
+          type: integer
+        predictedSavings:
+          type: number
+        avgRiskScore:
+          type: number
+        onTimeDeliveryRate:
+          type: number
+
+    SpendTrend:
+      type: object
+      required: [month, spend, budget]
+      properties:
+        month:
+          type: string
+        spend:
+          type: number
+        budget:
+          type: number
+        savings:
+          type: ["number", "null"]
+
+    SupplierRank:
+      type: object
+      required: [rank, supplierId, name, score, category, country]
+      properties:
+        rank:
+          type: integer
+        supplierId:
+          type: string
+        name:
+          type: string
+        score:
+          type: number
+        category:
+          type: string
+        country:
+          type: string
+        trend:
+          type: ["string", "null"]
+          enum: [up, down, stable, null]
+
+    RiskHeatmapPoint:
+      type: object
+      required: [country, lat, lon, riskScore, supplierCount]
+      properties:
+        country:
+          type: string
+        lat:
+          type: number
+        lon:
+          type: number
+        riskScore:
+          type: number
+        supplierCount:
+          type: integer
+
+    # ── Suppliers ──
+    Supplier:
+      type: object
+      required: [id, name, country, category, riskLevel, riskScore, onTimeDelivery, spend, status, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        country:
+          type: string
+        category:
+          type: string
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        riskScore:
+          type: number
+        onTimeDelivery:
+          type: number
+        spend:
+          type: number
+        status:
+          type: string
+          enum: [active, inactive, under_review]
+        website:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lon:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+
+    SupplierPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Supplier"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    SupplierInput:
+      type: object
+      required: [name, country, category]
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+        category:
+          type: string
+        website:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lon:
+          type: ["number", "null"]
+
+    SupplierUpdate:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+          enum: [active, inactive, under_review, null]
+
+    RiskHistoryPoint:
+      type: object
+      required: [date, riskScore, riskLevel]
+      properties:
+        date:
+          type: string
+        riskScore:
+          type: number
+        riskLevel:
+          type: string
+
+    # ── Risk ──
+    RiskScore:
+      type: object
+      required: [supplierId, supplierName, score, riskLevel, updatedAt]
+      properties:
+        supplierId:
+          type: string
+        supplierName:
+          type: string
+        score:
+          type: number
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        confidence:
+          type: ["number", "null"]
+        updatedAt:
+          type: string
+
+    RiskExplanation:
+      type: object
+      required: [supplierId, supplierName, score, riskLevel, shapValues, baseValue, confidence]
+      properties:
+        supplierId:
+          type: string
+        supplierName:
+          type: string
+        score:
+          type: number
+        riskLevel:
+          type: string
+        baseValue:
+          type: number
+        confidence:
+          type: number
+        shapValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShapFeature"
+        featureImportance:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeatureImportance"
+
+    ShapFeature:
+      type: object
+      required: [feature, value, shapValue, direction]
+      properties:
+        feature:
+          type: string
+        value:
+          type: ["number", "string"]
+        shapValue:
+          type: number
+        direction:
+          type: string
+          enum: [increases_risk, decreases_risk, neutral]
+        description:
+          type: ["string", "null"]
+
+    FeatureImportance:
+      type: object
+      required: [feature, importance]
+      properties:
+        feature:
+          type: string
+        importance:
+          type: number
+
+    Counterfactual:
+      type: object
+      required: [feature, currentValue, targetValue, expectedScoreChange, difficulty]
+      properties:
+        feature:
+          type: string
+        currentValue:
+          type: ["number", "string"]
+        targetValue:
+          type: ["number", "string"]
+        expectedScoreChange:
+          type: number
+        difficulty:
+          type: string
+          enum: [easy, moderate, hard]
+        description:
+          type: string
+
+    # ── Forecast ──
+    CommodityForecast:
+      type: object
+      required: [commodity, currentPrice, forecastPrice, change, changePercent, trend, confidence]
+      properties:
+        commodity:
+          type: string
+        currentPrice:
+          type: number
+        forecastPrice:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        trend:
+          type: string
+          enum: [up, down, stable]
+        confidence:
+          type: number
+        unit:
+          type: ["string", "null"]
+
+    ForecastSeries:
+      type: object
+      required: [commodity, unit, points]
+      properties:
+        commodity:
+          type: string
+        unit:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastPoint"
+
+    ForecastPoint:
+      type: object
+      required: [date, actual, predicted]
+      properties:
+        date:
+          type: string
+        actual:
+          type: ["number", "null"]
+        predicted:
+          type: number
+        lowerBound:
+          type: ["number", "null"]
+        upperBound:
+          type: ["number", "null"]
+
+    # ── Fraud ──
+    FraudAlert:
+      type: object
+      required: [id, supplierId, supplierName, type, severity, status, description, detectedAt]
+      properties:
+        id:
+          type: string
+        supplierId:
+          type: string
+        supplierName:
+          type: string
+        type:
+          type: string
+          enum:
+            - bid_rigging
+            - invoice_duplication
+            - kickback
+            - shell_company
+            - price_manipulation
+            - collusion
+            - duplicate_vendor
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        status:
+          type: string
+          enum: [open, investigating, resolved]
+        description:
+          type: string
+        anomalyScore:
+          type: ["number", "null"]
+        detectedAt:
+          type: string
+        resolvedAt:
+          type: ["string", "null"]
+
+    FraudResolution:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          type: string
+        notes:
+          type: ["string", "null"]
+
+    FraudStats:
+      type: object
+      required: [totalAlerts, openAlerts, resolvedAlerts, fraudPreventedAmount, detectionRate]
+      properties:
+        totalAlerts:
+          type: integer
+        openAlerts:
+          type: integer
+        resolvedAlerts:
+          type: integer
+        fraudPreventedAmount:
+          type: number
+        detectionRate:
+          type: number
+        alertsByType:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertTypeCount"
+
+    AlertTypeCount:
+      type: object
+      required: [type, count]
+      properties:
+        type:
+          type: string
+        count:
+          type: integer
+
+    # ── Contracts ──
+    Contract:
+      type: object
+      required: [id, supplierId, supplierName, title, status, value, expiresAt, riskScore]
+      properties:
+        id:
+          type: string
+        supplierId:
+          type: string
+        supplierName:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [active, expiring, expired, under_review]
+        value:
+          type: number
+        expiresAt:
+          type: string
+        riskScore:
+          type: ["number", "null"]
+        clauseCount:
+          type: ["integer", "null"]
+        riskyClauseCount:
+          type: ["integer", "null"]
+
+    ContractInput:
+      type: object
+      required: [supplierId, title, content]
+      properties:
+        supplierId:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+          description: Full contract text or base64-encoded PDF
+        value:
+          type: ["number", "null"]
+        expiresAt:
+          type: ["string", "null"]
+
+    ContractDetail:
+      type: object
+      required: [id, supplierId, supplierName, title, status, value, expiresAt, summary, riskScore, missingClauses, complianceIssues]
+      properties:
+        id:
+          type: string
+        supplierId:
+          type: string
+        supplierName:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        value:
+          type: number
+        expiresAt:
+          type: string
+        summary:
+          type: string
+        riskScore:
+          type: number
+        missingClauses:
+          type: array
+          items:
+            type: string
+        complianceIssues:
+          type: array
+          items:
+            type: string
+
+    ContractClause:
+      type: object
+      required: [id, clauseType, text, riskLevel, explanation]
+      properties:
+        id:
+          type: string
+        clauseType:
+          type: string
+        text:
+          type: string
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        explanation:
+          type: string
+        recommendation:
+          type: ["string", "null"]
+
+    # ── Knowledge Graph ──
+    GraphData:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/GraphNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/GraphEdge"
+
+    GraphNode:
+      type: object
+      required: [id, type, label]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [supplier, product, contract, country, risk_factor, news_event]
+        label:
+          type: string
+        riskScore:
+          type: ["number", "null"]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    GraphEdge:
+      type: object
+      required: [id, source, target, type]
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        target:
+          type: string
+        type:
+          type: string
+        weight:
+          type: ["number", "null"]
+        label:
+          type: ["string", "null"]
+
+    # ── News ──
+    NewsArticle:
+      type: object
+      required: [id, title, source, sentiment, publishedAt, url]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        source:
+          type: string
+        summary:
+          type: ["string", "null"]
+        sentiment:
+          type: string
+          enum: [positive, neutral, negative]
+        sentimentScore:
+          type: ["number", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        supplierId:
+          type: ["string", "null"]
+        supplierName:
+          type: ["string", "null"]
+        publishedAt:
+          type: string
+        url:
+          type: string
+        impactLevel:
+          type: ["string", "null"]
+          enum: [low, medium, high, null]
+
+    NewsTimelineItem:
+      type: object
+      required: [date, articles, avgSentiment]
+      properties:
+        date:
+          type: string
+        articles:
+          type: integer
+        avgSentiment:
+          type: number
+        majorEvent:
+          type: ["string", "null"]
+
+    # ── Search ──
+    SearchQuery:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        filters:
+          type: object
+          additionalProperties: true
+        limit:
+          type: ["integer", "null"]
+          default: 10
+
+    SearchResult:
+      type: object
+      required: [id, type, title, score, snippet]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [supplier, contract, news, alert]
+        title:
+          type: string
+        score:
+          type: number
+        snippet:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    # ── Monitoring ──
+    DriftMetric:
+      type: object
+      required: [model, metricName, currentValue, baselineValue, driftScore, status, measuredAt]
+      properties:
+        model:
+          type: string
+        metricName:
+          type: string
+        currentValue:
+          type: number
+        baselineValue:
+          type: number
+        driftScore:
+          type: number
+        status:
+          type: string
+          enum: [normal, warning, critical]
+        measuredAt:
+          type: string
+
+    ModelMetrics:
+      type: object
+      required: [model, version, avgLatencyMs, p99LatencyMs, errorRate, predictionsToday, accuracy]
+      properties:
+        model:
+          type: string
+        version:
+          type: string
+        avgLatencyMs:
+          type: number
+        p99LatencyMs:
+          type: number
+        errorRate:
+          type: number
+        predictionsToday:
+          type: integer
+        accuracy:
+          type: ["number", "null"]
+        f1Score:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [healthy, degraded, down]
+
+    PredictionVolumePoint:
+      type: object
+      required: [date, risk, forecast, fraud, contract, recommender]
+      properties:
+        date:
+          type: string
+        risk:
+          type: integer
+        forecast:
+          type: integer
+        fraud:
+          type: integer
+        contract:
+          type: integer
+        recommender:
+          type: integer
+
+    # ── Experiments ──
+    Experiment:
+      type: object
+      required: [id, name, model, status, startedAt, metrics]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        model:
+          type: string
+        status:
+          type: string
+          enum: [running, finished, failed]
+        startedAt:
+          type: string
+        finishedAt:
+          type: ["string", "null"]
+        metrics:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        hyperparams:
+          type: object
+          additionalProperties: true
+
+    ExperimentMetrics:
+      type: object
+      properties:
+        accuracy:
+          type: ["number", "null"]
+        f1Score:
+          type: ["number", "null"]
+        auc:
+          type: ["number", "null"]
+        mse:
+          type: ["number", "null"]
+        mae:
+          type: ["number", "null"]
+        rmse:
+          type: ["number", "null"]
+
+    ExperimentDetail:
+      type: object
+      required: [id, name, model, status, startedAt, metrics, hyperparams, artifacts]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        model:
+          type: string
+        status:
+          type: string
+        startedAt:
+          type: string
+        finishedAt:
+          type: ["string", "null"]
+        metrics:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        hyperparams:
+          type: object
+          additionalProperties: true
+        metricHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricHistoryPoint"
+        artifacts:
+          type: array
+          items:
+            type: string
+
+    MetricHistoryPoint:
+      type: object
+      required: [step, trainLoss, valLoss]
+      properties:
+        step:
+          type: integer
+        trainLoss:
+          type: number
+        valLoss:
+          type: number
+        accuracy:
+          type: ["number", "null"]
+
+    # ── Simulation ──
+    SimulationInput:
+      type: object
+      required: [supplierId, scenario]
+      properties:
+        supplierId:
+          type: string
+        scenario:
+          type: object
+          required: [inflationDelta, shippingDelayDays, priceDelta, demandDelta]
+          properties:
+            inflationDelta:
+              type: number
+              description: Percentage point change in inflation
+            shippingDelayDays:
+              type: number
+            priceDelta:
+              type: number
+              description: Percentage change in supplier price
+            demandDelta:
+              type: number
+              description: Percentage change in demand
+
+    SimulationResult:
+      type: object
+      required: [supplierId, baseline, simulated, changes]
+      properties:
+        supplierId:
+          type: string
+        baseline:
+          $ref: "#/components/schemas/SimulationSnapshot"
+        simulated:
+          $ref: "#/components/schemas/SimulationSnapshot"
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimulationChange"
+
+    SimulationSnapshot:
+      type: object
+      required: [riskScore, predictedPrice, fraudProbability, recommendationScore]
+      properties:
+        riskScore:
+          type: number
+        predictedPrice:
+          type: number
+        fraudProbability:
+          type: number
+        recommendationScore:
+          type: number
+
+    SimulationChange:
+      type: object
+      required: [metric, baseline, simulated, delta, direction]
+      properties:
+        metric:
+          type: string
+        baseline:
+          type: number
+        simulated:
+          type: number
+        delta:
+          type: number
+        direction:
+          type: string
+          enum: [better, worse, neutral]
+
+    # ── Savings ──
+    SavingsSummary:
+      type: object
+      required: [totalSavings, fraudPrevented, riskReduction, timeSaved, efficiencyGain, ytdSavings]
+      properties:
+        totalSavings:
+          type: number
+        fraudPrevented:
+          type: number
+        riskReduction:
+          type: number
+        timeSaved:
+          type: number
+          description: Hours saved
+        efficiencyGain:
+          type: number
+          description: Percentage improvement
+        ytdSavings:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlySavings"
+
+    MonthlySavings:
+      type: object
+      required: [month, savings, fraud, risk]
+      properties:
+        month:
+          type: string
+        savings:
+          type: number
+        fraud:
+          type: number
+        risk:
+          type: number
+
+    SavingsInput:
+      type: object
+      required: [supplierCount, avgContractValue, riskReductionTarget]
+      properties:
+        supplierCount:
+          type: integer
+        avgContractValue:
+          type: number
+        riskReductionTarget:
+          type: number
+        fraudDetectionRate:
+          type: ["number", "null"]
+        automationLevel:
+          type: ["number", "null"]
+
+    SavingsProjection:
+      type: object
+      required: [year1, year2, year3, roiPercent, paybackMonths]
+      properties:
+        year1:
+          type: number
+        year2:
+          type: number
+        year3:
+          type: number
+        roiPercent:
+          type: number
+        paybackMonths:
+          type: number
+        breakdown:
+          type: object
+          additionalProperties: true
+
+    # ── Alerts ──
+    SmartAlert:
+      type: object
+      required: [id, type, title, message, severity, isRead, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - high_risk_supplier
+            - contract_expiring
+            - price_spike
+            - drift_detected
+            - pipeline_failure
+            - negative_news
+            - fraud_detected
+        title:
+          type: string
+        message:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, error, critical]
+        isRead:
+          type: boolean
+        supplierId:
+          type: ["string", "null"]
+        supplierName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        dismissedAt:
+          type: ["string", "null"]
+
+    # ── Agents ──
+    AgentStatus:
+      type: object
+      required: [id, name, type, status, lastRun, tasksCompleted]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [risk_analyst, price_forecaster, contract_analyst, fraud_investigator, procurement_copilot]
+        status:
+          type: string
+          enum: [idle, running, error]
+        lastRun:
+          type: ["string", "null"]
+        tasksCompleted:
+          type: integer
+        currentTask:
+          type: ["string", "null"]
+        avgResponseMs:
+          type: ["number", "null"]
+
+    AgentQuery:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        agentType:
+          type: ["string", "null"]
+          enum: [risk_analyst, price_forecaster, contract_analyst, fraud_investigator, procurement_copilot, null]
+        context:
+          type: object
+          additionalProperties: true
+
+    AgentResponse:
+      type: object
+      required: [agentType, message, confidence]
+      properties:
+        agentType:
+          type: string
+        message:
+          type: string
+        confidence:
+          type: number
+        sources:
+          type: array
+          items:
+            type: string
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentAction"
+
+    AgentAction:
+      type: object
+      required: [label, type]
+      properties:
+        label:
+          type: string
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true

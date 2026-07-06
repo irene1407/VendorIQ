@@ -1,0 +1,1 @@
+- [VendorIQ restore from zip backup](vendoriq-restore.md) — restoring a full pre-existing project from an uploaded zip into a fresh artifact scaffold; codegen/react-query gotchas encountered.

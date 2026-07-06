@@ -1,6 +1,6 @@
-# [Project name]
+# VendorIQ
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Enterprise procurement intelligence SaaS: supplier risk scoring, price forecasting, fraud detection, contract analysis, and an AI Agent Hub copilot for procurement teams.
 
 ## Run & Operate
 
@@ -22,15 +22,22 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/vendor-iq` — React + Vite frontend (dashboard, suppliers, risk, forecast, fraud, contracts, graph, news, search, monitoring, experiments, simulation, savings, alerts, AI Agent Hub)
+- `artifacts/api-server` — Express API, routes in `src/routes/*` (one file per domain, e.g. `auth.ts`, `agents.ts`)
+- `lib/api-spec/openapi.yaml` — source of truth for all API contracts
+- `lib/db/src/schema/*` — Drizzle schema (suppliers, contracts, alerts)
+- `artifacts/vendor-iq/src/index.css` — theme (black/ivory/grey palette)
+- `artifacts/vendor-iq/src/components/layout/Shell.tsx` — app shell/sidebar, including the current-user widget (Name/Role/Company/Online status), backed by `GET /api/auth/me`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The AI Agent Hub copilot chat (`/agents` page, `POST /api/agents/query`) uses keyword-matched canned responses, not a real LLM — this is intentional demo behavior, not a bug.
+- No real authentication system exists. The current-user display is backed by a single mock `GET /api/auth/me` endpoint returning a fixed user — there's no login flow.
+- All currency is displayed in ₹ INR with Cr/L/K notation throughout the app.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Dashboard-driven procurement intelligence app covering supplier risk, price forecasting, fraud detection, contract analysis, a knowledge graph, news monitoring, semantic search, ML model monitoring/experiments, what-if simulation, savings tracking, alerts, and an AI Agent Hub with a copilot chat plus 5 autonomous background agents.
 
 ## User preferences
 
@@ -38,7 +45,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The app was restored from a full project zip backup; if something seems missing, check `.agents/memory/vendoriq-restore.md` for the restore process used.
+- Some pages (`contracts.tsx`, `risk.tsx`, `forecast.tsx`, `experiments.tsx`, `agents.tsx`) have pre-existing `tsc` type errors from an Orval/react-query 5.101.x version interaction (`queryKey` reported as missing). This does not affect the running app since Vite's dev/build path doesn't run `tsc`. See `.agents/memory/vendoriq-restore.md` for details.
 
 ## Pointers
 

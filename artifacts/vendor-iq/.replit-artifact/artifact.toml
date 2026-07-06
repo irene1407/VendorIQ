@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "VendorIQ Dashboard"
+version = "1.0.0"
+id = "artifacts/vendor-iq"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22743
+
+[services.development]
+run = "pnpm --filter @workspace/vendor-iq run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vendor-iq", "run", "build" ]
+publicDir = "artifacts/vendor-iq/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22743"
+BASE_PATH = "/"
