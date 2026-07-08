@@ -11,57 +11,55 @@ export default function Graph() {
   const { nodes, edges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
 
-    // Map API graph data to ReactFlow format
-    const rfNodes: Node[] = data.nodes.map(node => {
-      // Determine color based on node type
-      let bgColor = 'hsl(var(--card))';
-      let borderColor = 'hsl(var(--border))';
-      let color = 'hsl(var(--foreground))';
+    // Deterministic column layout, grouped by node type, so the graph never overlaps randomly.
+    const TYPE_ORDER = ['country', 'supplier', 'product', 'risk_factor', 'news_event'];
+    const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
+      supplier:    { bg: '#5B9BD5', text: '#0a1220' },
+      country:     { bg: '#7ED6A5', text: '#0a1220' },
+      product:     { bg: '#F4C95D', text: '#0a1220' },
+      risk_factor: { bg: '#F26D6D', text: '#1a0a0a' },
+      news_event:  { bg: '#C79DE0', text: '#0a1220' },
+    };
 
-      switch(node.type) {
-        case 'supplier': 
-          bgColor = 'hsl(var(--accent))';
-          color = 'hsl(var(--accent-foreground))';
-          break;
-        case 'country':
-          bgColor = 'hsl(var(--secondary))';
-          color = 'hsl(var(--secondary-foreground))';
-          break;
-        case 'product':
-          bgColor = 'hsl(var(--primary))';
-          color = 'hsl(var(--primary-foreground))';
-          break;
-        case 'risk_factor':
-          bgColor = 'hsl(var(--destructive))';
-          color = 'hsl(var(--destructive-foreground))';
-          break;
-        case 'news_event':
-          bgColor = 'hsl(var(--muted))';
-          break;
-      }
+    const COLUMN_WIDTH = 280;
+    const ROW_HEIGHT = 90;
 
-      // Simple layout logic since API doesn't return x,y (in a real app, use dagre/elkjs)
-      // We'll just scatter them randomly for the demo, centered around 400, 300
-      const x = 400 + (Math.random() - 0.5) * 600;
-      const y = 300 + (Math.random() - 0.5) * 400;
+    const groups = new Map<string, typeof data.nodes>();
+    for (const node of data.nodes) {
+      const key = node.type;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(node);
+    }
 
-      return {
-        id: node.id,
-        position: { x, y },
-        data: { label: node.label },
-        style: {
-          background: bgColor,
-          color: color,
-          border: `1px solid ${borderColor}`,
-          borderRadius: '8px',
-          padding: '10px 15px',
-          fontSize: '12px',
-          fontWeight: 'bold',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-          width: 150,
-          textAlign: 'center'
-        }
-      };
+    const orderedTypes = [...TYPE_ORDER.filter(t => groups.has(t)), ...[...groups.keys()].filter(t => !TYPE_ORDER.includes(t))];
+
+    const rfNodes: Node[] = [];
+    orderedTypes.forEach((type, colIndex) => {
+      const nodesInGroup = groups.get(type)!;
+      const groupHeight = nodesInGroup.length * ROW_HEIGHT;
+      nodesInGroup.forEach((node, rowIndex) => {
+        const style = TYPE_STYLE[type] ?? { bg: '#9CA3AF', text: '#0a1220' };
+        rfNodes.push({
+          id: node.id,
+          position: {
+            x: colIndex * COLUMN_WIDTH,
+            y: rowIndex * ROW_HEIGHT - groupHeight / 2,
+          },
+          data: { label: node.label },
+          style: {
+            background: style.bg,
+            color: style.text,
+            border: 'none',
+            borderRadius: '8px',
+            padding: '10px 15px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.25), 0 2px 4px -1px rgba(0, 0, 0, 0.15)',
+            width: 160,
+            textAlign: 'center',
+          },
+        });
+      });
     });
 
     const rfEdges: Edge[] = data.edges.map(edge => ({
@@ -92,10 +90,11 @@ export default function Graph() {
       <Card className="flex-1 bg-card/50 backdrop-blur border-border/10 overflow-hidden relative">
         <div className="absolute top-4 left-4 z-10 flex gap-2">
            <div className="bg-background/80 backdrop-blur p-2 rounded border border-border/20 text-xs flex gap-4 shadow-sm">
-             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-accent"></div> Supplier</div>
-             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-secondary"></div> Country</div>
-             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-primary"></div> Product</div>
-             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-destructive"></div> Risk Factor</div>
+             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: '#7ED6A5' }}></div> Country</div>
+             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: '#5B9BD5' }}></div> Supplier</div>
+             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: '#F4C95D' }}></div> Product</div>
+             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: '#F26D6D' }}></div> Risk Factor</div>
+             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: '#C79DE0' }}></div> News Event</div>
            </div>
         </div>
         <CardContent className="p-0 h-full">

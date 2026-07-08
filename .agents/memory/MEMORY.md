@@ -1,1 +1,2 @@
 - [VendorIQ restore from zip backup](vendoriq-restore.md) — restoring a full pre-existing project from an uploaded zip into a fresh artifact scaffold; codegen/react-query gotchas encountered.
+- [Recharts ResponsiveContainer in flex layouts](recharts-responsive-container-flex.md) — nested flex-1/percentage wrappers can make Pie/donut charts render as a tiny clipped sliver; use a fixed-pixel-height wrapper instead.

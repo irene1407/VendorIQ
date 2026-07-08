@@ -2,7 +2,7 @@ import { useListFraudAlerts, useGetFraudStats, useResolveFraudAlert, FraudAlertT
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { ShieldAlert, CheckCircle2, Search, Filter, Shield } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ export default function Fraud() {
     );
   };
 
-  const COLORS = ['#A7C7E7', '#F7C6C7', '#B8E0D2', '#F4E1A1', '#D6C6E1', '#F5C9A8', '#C9E4C5'];
+  const COLORS = ['#3B82F6', '#EF4444', '#22C55E', '#F59E0B', '#A855F7', '#EC4899', '#14B8A6'];
 
   const getSeverityColor = (severity: string) => {
     switch(severity) {
@@ -172,38 +172,49 @@ export default function Fraud() {
             <CardTitle>Topology</CardTitle>
             <CardDescription>Breakdown of anomaly types</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 flex items-center justify-center">
+          <CardContent className="flex flex-col items-center p-4">
             {isStatsLoading ? (
-               <div className="h-64 w-64 rounded-full bg-muted/20 animate-pulse" />
+              <div className="h-64 w-64 rounded-full bg-muted/20 animate-pulse my-8" />
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={stats?.alertsByType}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={80}
-                    outerRadius={110}
-                    paddingAngle={2}
-                    dataKey="count"
-                    nameKey="type"
-                    stroke="none"
-                  >
-                    {stats?.alertsByType?.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                    formatter={(value: number, name: string) => [value, formatFraudType(name)]}
-                  />
-                  <Legend 
-                    formatter={(value) => <span className="text-xs text-foreground">{formatFraudType(value)}</span>}
-                    layout="vertical"
-                    verticalAlign="bottom"
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <>
+                <div style={{ width: '100%', height: 260 }}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={stats?.alertsByType}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        dataKey="count"
+                        nameKey="type"
+                        stroke="none"
+                        isAnimationActive={false}
+                      >
+                        {stats?.alertsByType?.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                        formatter={(value: number, name: string) => [value, formatFraudType(name)]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2 w-full">
+                  {stats?.alertsByType?.map((entry, index) => (
+                    <div key={entry.type} className="flex items-center gap-2 text-xs text-foreground">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ background: COLORS[index % COLORS.length] }}
+                      />
+                      <span className="truncate">{formatFraudType(entry.type)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
