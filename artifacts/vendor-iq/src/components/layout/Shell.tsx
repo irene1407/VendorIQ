@@ -242,30 +242,78 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         
-        <div className="p-4 border-t border-border/10">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="relative shrink-0">
-              <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-medium text-sm">
-                {currentUser?.avatarInitials ?? "··"}
+        {/* CPO Profile */}
+        <div className="p-3 border-t border-border/10">
+          <div className="relative rounded-xl overflow-hidden">
+            {/* Background gradient */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+
+            <div className="relative p-3 space-y-3">
+              {/* Avatar + name row */}
+              <div className="flex items-center gap-3">
+                {/* Avatar with glowing ring */}
+                <div className="relative shrink-0">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/80 to-primary/30 flex items-center justify-center font-bold text-base text-white shadow-lg ring-2 ring-primary/40 ring-offset-1 ring-offset-sidebar">
+                    {currentUser?.avatarInitials ?? "··"}
+                  </div>
+                  {/* Online pulse */}
+                  {currentUser?.online && (
+                    <>
+                      <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-sidebar z-10" />
+                      <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-400 animate-ping opacity-60" />
+                    </>
+                  )}
+                  {!currentUser?.online && (
+                    <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-muted-foreground border-2 border-sidebar" />
+                  )}
+                </div>
+
+                {/* Name + title */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-foreground truncate leading-tight">
+                    {currentUser?.name ?? "Loading…"}
+                  </div>
+                  <div className="mt-0.5 inline-flex items-center gap-1 bg-primary/20 border border-primary/30 rounded-full px-2 py-0.5">
+                    <div className="h-1 w-1 rounded-full bg-primary" />
+                    <span className="text-[9px] font-bold tracking-widest text-primary uppercase truncate">
+                      {currentUser?.role?.split(" ").map(w => w[0]).join("") ?? "CPO"}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <span
-                className={cn(
-                  "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-sidebar",
-                  currentUser?.online ? "bg-emerald-400" : "bg-muted-foreground"
-                )}
-                title={currentUser?.online ? "Online" : "Offline"}
-              />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-medium truncate">
-                {currentUser?.name ?? "Loading…"}
-              </span>
-              <span className="text-xs text-muted-foreground truncate">
-                {currentUser?.role ?? ""}
-              </span>
-              <span className="text-[11px] text-muted-foreground/70 truncate">
-                {currentUser?.company ?? ""}
-              </span>
+
+              {/* Role + company */}
+              <div className="space-y-0.5 pl-0.5">
+                <div className="text-xs font-medium text-foreground/80 truncate">
+                  {currentUser?.role ?? ""}
+                </div>
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground/70 truncate">
+                  <svg className="h-2.5 w-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                  </svg>
+                  <span className="truncate">{currentUser?.company ?? ""}</span>
+                </div>
+              </div>
+
+              {/* Status + actions */}
+              <div className="flex items-center justify-between pt-1 border-t border-border/10">
+                <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-[10px] font-medium text-emerald-400">
+                    {currentUser?.online ? "Active now" : "Offline"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <button className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" title="Settings">
+                    <Settings className="h-3.5 w-3.5" />
+                  </button>
+                  <button className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Sign out">
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
