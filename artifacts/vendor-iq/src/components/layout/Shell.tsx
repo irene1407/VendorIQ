@@ -18,10 +18,20 @@ import {
   Bot,
   LogOut,
   Settings,
-  Loader2
+  Loader2,
+  User,
+  Building2,
+  Mail,
+  Shield,
+  BellRing,
+  Newspaper as NewsIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useGetCurrentUser, useGetSearchSuggestions, getGetSearchSuggestionsQueryKey } from "@workspace/api-client-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Switch } from "@/components/ui/switch"
+import { toast } from "sonner"
 
 const mainNav = [
   { title: "Command Center", href: "/", icon: BarChart3 },
@@ -169,8 +179,138 @@ function useDebounce<T>(value: T, delay: number): T {
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
   const { data: currentUser } = useGetCurrentUser()
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [logoutOpen, setLogoutOpen] = React.useState(false)
+
+  // Notification preferences state
+  const [notifs, setNotifs] = React.useState({
+    criticalAlerts: true,
+    priceSpikes: true,
+    contractExpiry: true,
+    fraudAlerts: true,
+    weeklyDigest: false,
+  })
+
+  const handleLogout = () => {
+    setLogoutOpen(false)
+    toast.success("Signed out successfully", {
+      description: "See you next time, " + (currentUser?.name?.split(" ")[0] ?? "there") + ".",
+      duration: 3000,
+    })
+  }
 
   return (
+    <>
+    {/* Settings Sheet */}
+    <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <SheetContent side="right" className="w-[400px] bg-background border-border/20 overflow-y-auto">
+        <SheetHeader className="mb-6">
+          <SheetTitle className="text-lg font-display font-bold">Settings</SheetTitle>
+          <SheetDescription className="text-muted-foreground text-sm">
+            Manage your profile and notification preferences.
+          </SheetDescription>
+        </SheetHeader>
+
+        {/* Profile section */}
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Profile</h3>
+            <div className="rounded-xl bg-card/50 border border-border/10 p-4 space-y-3">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-full bg-gradient-to-br from-primary/80 to-primary/30 flex items-center justify-center font-bold text-lg text-white ring-2 ring-primary/30">
+                  {currentUser?.avatarInitials ?? "··"}
+                </div>
+                <div>
+                  <div className="font-semibold text-base">{currentUser?.name}</div>
+                  <div className="text-sm text-muted-foreground">{currentUser?.role}</div>
+                </div>
+              </div>
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4 shrink-0" />
+                  <span>sarah.jenkins@vendoriq.com</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  <span>{currentUser?.company}</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                  <Shield className="h-4 w-4 shrink-0" />
+                  <span>Admin · Full access</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notification preferences */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Notifications</h3>
+            <div className="rounded-xl bg-card/50 border border-border/10 divide-y divide-border/10">
+              {[
+                { key: "criticalAlerts" as const, icon: <ShieldAlert className="h-4 w-4 text-destructive" />, label: "Critical Alerts", desc: "Fraud and high-risk supplier flags" },
+                { key: "priceSpikes" as const, icon: <TrendingUp className="h-4 w-4 text-amber-400" />, label: "Price Spikes", desc: "Commodity price deviation alerts" },
+                { key: "contractExpiry" as const, icon: <FileText className="h-4 w-4 text-blue-400" />, label: "Contract Expiry", desc: "Contracts expiring within 90 days" },
+                { key: "fraudAlerts" as const, icon: <AlertTriangle className="h-4 w-4 text-amber-400" />, label: "Fraud Alerts", desc: "Invoice and vendor anomalies" },
+                { key: "weeklyDigest" as const, icon: <NewsIcon className="h-4 w-4 text-primary" />, label: "Weekly Digest", desc: "Summary email every Monday" },
+              ].map(({ key, icon, label, desc }) => (
+                <div key={key} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {icon}
+                    <div>
+                      <div className="text-sm font-medium">{label}</div>
+                      <div className="text-xs text-muted-foreground">{desc}</div>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={notifs[key]}
+                    onCheckedChange={(v) => {
+                      setNotifs(prev => ({ ...prev, [key]: v }))
+                      toast.success(`${label} notifications ${v ? "enabled" : "disabled"}`)
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Danger zone */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Session</h3>
+            <div className="rounded-xl bg-card/50 border border-border/10 p-4">
+              <button
+                onClick={() => { setSettingsOpen(false); setLogoutOpen(true) }}
+                className="w-full flex items-center gap-3 text-sm text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out of VendorIQ
+              </button>
+            </div>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+
+    {/* Logout confirmation */}
+    <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+      <AlertDialogContent className="bg-background border-border/20">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sign out?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You'll be signed out of VendorIQ. Any unsaved changes will be lost.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="border-border/20">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleLogout}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Sign out
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border/10 bg-sidebar flex flex-col">
@@ -306,10 +446,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   </span>
                 </div>
                 <div className="flex items-center gap-0.5">
-                  <button className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" title="Settings">
+                  <button onClick={() => setSettingsOpen(true)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors" title="Settings">
                     <Settings className="h-3.5 w-3.5" />
                   </button>
-                  <button className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Sign out">
+                  <button onClick={() => setLogoutOpen(true)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Sign out">
                     <LogOut className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -333,7 +473,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive border border-background"></span>
               </button>
             </Link>
-            <button className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-card">
+            <button onClick={() => setSettingsOpen(true)} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-card">
               <Settings className="h-5 w-5" />
             </button>
           </div>
@@ -346,5 +486,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
     </div>
+    </>
   )
 }
