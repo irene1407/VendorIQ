@@ -2,13 +2,27 @@ import { useSemanticSearch } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search as SearchIcon, Loader2, FileText, Users, Newspaper, ShieldAlert } from "lucide-react";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
+import { useState, useEffect } from "react";
 
 export default function Search() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("q") ?? "";
+  });
   const [hasSearched, setHasSearched] = useState(false);
   const searchMutation = useSemanticSearch();
+
+  // Auto-trigger search when arriving with ?q= from the header bar
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
+    if (q && q.trim()) {
+      setQuery(q);
+      setHasSearched(true);
+      searchMutation.mutate({ data: { query: q } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

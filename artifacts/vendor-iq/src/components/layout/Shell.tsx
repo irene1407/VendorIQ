@@ -17,10 +17,11 @@ import {
   Bell, 
   Bot,
   LogOut,
-  Settings
+  Settings,
+  Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useGetCurrentUser } from "@workspace/api-client-react"
+import { useGetCurrentUser, useGetSearchSuggestions, getGetSearchSuggestionsQueryKey } from "@workspace/api-client-react"
 
 const mainNav = [
   { title: "Command Center", href: "/", icon: BarChart3 },
@@ -44,6 +45,126 @@ const advancedNav = [
   { title: "Experiment Tracker", href: "/experiments", icon: TestTube },
   { title: "AI Agent Hub", href: "/agents", icon: Bot },
 ]
+
+function GlobalSearch() {
+  const [, navigate] = useLocation()
+  const [query, setQuery] = React.useState("")
+  const [open, setOpen] = React.useState(false)
+  const [focused, setFocused] = React.useState(false)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const containerRef = React.useRef<HTMLDivElement>(null)
+
+  const debouncedQuery = useDebounce(query, 200)
+
+  const { data: suggestions, isFetching } = useGetSearchSuggestions(
+    { q: debouncedQuery },
+    { query: { enabled: debouncedQuery.length >= 2, queryKey: getGetSearchSuggestionsQueryKey({ q: debouncedQuery }) } }
+  )
+
+  const showDropdown = focused && (query.length >= 2) && (isFetching || (suggestions && suggestions.length > 0))
+
+  const handleSubmit = (value: string) => {
+    if (!value.trim()) return
+    setOpen(false)
+    setFocused(false)
+    inputRef.current?.blur()
+    navigate(`/search?q=${encodeURIComponent(value.trim())}`)
+  }
+
+  // ⌘K / Ctrl+K to focus
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [])
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setFocused(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  return (
+    <div ref={containerRef} className="relative w-96 hidden md:flex items-center">
+      <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+      <input
+        ref={inputRef}
+        type="text"
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setFocused(true)}
+        onKeyDown={e => {
+          if (e.key === "Enter") handleSubmit(query)
+          if (e.key === "Escape") { setFocused(false); inputRef.current?.blur() }
+        }}
+        placeholder="Search suppliers, contracts, alerts (Ctrl+K)..."
+        className="h-9 w-full rounded-md border border-border/20 bg-card/50 pl-9 pr-12 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-muted-foreground"
+      />
+      {isFetching && query.length >= 2
+        ? <Loader2 className="absolute right-10 h-3.5 w-3.5 text-muted-foreground animate-spin" />
+        : null
+      }
+      <kbd className="pointer-events-none absolute right-2 top-2 hidden h-5 select-none items-center gap-1 rounded border border-border/20 bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex text-muted-foreground">
+        <span className="text-xs">⌘</span>K
+      </kbd>
+
+      {showDropdown && (
+        <div className="absolute top-full mt-1.5 left-0 w-full z-50 rounded-md border border-border/20 bg-popover shadow-xl overflow-hidden">
+          {isFetching && (!suggestions || suggestions.length === 0) ? (
+            <div className="px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching…
+            </div>
+          ) : (
+            <ul>
+              {suggestions?.map((s, i) => (
+                <li key={i}>
+                  <button
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors"
+                    onMouseDown={e => { e.preventDefault(); setQuery(s); handleSubmit(s) }}
+                  >
+                    <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">{s}</span>
+                  </button>
+                </li>
+              ))}
+              {query.trim() && (
+                <li className="border-t border-border/10">
+                  <button
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left text-primary hover:bg-primary/10 transition-colors"
+                    onMouseDown={e => { e.preventDefault(); handleSubmit(query) }}
+                  >
+                    <Search className="h-3.5 w-3.5 shrink-0" />
+                    <span>Search for "<strong>{query}</strong>"</span>
+                  </button>
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = React.useState(value)
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
@@ -154,17 +275,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 pl-64 flex flex-col min-h-screen">
         <header className="h-16 border-b border-border/10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40 flex items-center justify-between px-8">
           <div className="flex items-center gap-4 flex-1">
-            <div className="relative w-96 hidden md:flex items-center">
-              <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search suppliers, contracts, alerts (Ctrl+K)..."
-                className="h-9 w-full rounded-md border border-border/20 bg-card/50 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-muted-foreground"
-              />
-              <kbd className="pointer-events-none absolute right-2 top-2 hidden h-5 select-none items-center gap-1 rounded border border-border/20 bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex text-muted-foreground">
-                <span className="text-xs">⌘</span>K
-              </kbd>
-            </div>
+            <GlobalSearch />
           </div>
           
           <div className="flex items-center gap-4">
