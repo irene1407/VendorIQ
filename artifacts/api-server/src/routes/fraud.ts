@@ -2,76 +2,254 @@ import { Router } from "express";
 
 const router = Router();
 
-const FRAUD_ALERTS = [
-  {
-    id: "fa-001", supplierId: "s-019", supplierName: "Meridian Supplies Ltd", type: "invoice_duplication",
-    severity: "high", status: "open", description: "Invoice #INV-2024-8821 submitted twice with different amounts (₹1.18Cr vs ₹1.31Cr) within 72 hours.",
-    anomalyScore: 0.94, detectedAt: new Date(Date.now() - 2 * 3600000).toISOString(), resolvedAt: null,
-  },
-  {
-    id: "fa-002", supplierId: "s-020", supplierName: "Global Procurement Partners", type: "shell_company",
-    severity: "critical", status: "investigating", description: "Vendor registered 11 days before first contract award. No verifiable business address. Shared banking details with 2 other vendors.",
-    anomalyScore: 0.98, detectedAt: new Date(Date.now() - 24 * 3600000).toISOString(), resolvedAt: null,
-  },
-  {
-    id: "fa-003", supplierId: "s-021", supplierName: "Apex Industrial Corp", type: "bid_rigging",
-    severity: "critical", status: "investigating", description: "Identical bid documents detected across 4 nominally independent vendors. Pattern consistent with coordinated bid manipulation.",
-    anomalyScore: 0.97, detectedAt: new Date(Date.now() - 48 * 3600000).toISOString(), resolvedAt: null,
-  },
-  {
-    id: "fa-004", supplierId: "s-022", supplierName: "Titan Logistics", type: "price_manipulation",
-    severity: "medium", status: "open", description: "Sudden 34% price increase on standard items following contract renewal. Pricing deviates 2.8 sigma from category benchmark.",
-    anomalyScore: 0.81, detectedAt: new Date(Date.now() - 6 * 3600000).toISOString(), resolvedAt: null,
-  },
-  {
-    id: "fa-005", supplierId: "s-023", supplierName: "Nexus Materials", type: "duplicate_vendor",
-    severity: "medium", status: "open", description: "Near-identical company name, contact email domain, and bank account routing number to existing vendor NexusMat Inc (registered 2019).",
-    anomalyScore: 0.87, detectedAt: new Date(Date.now() - 12 * 3600000).toISOString(), resolvedAt: null,
-  },
-  {
-    id: "fa-006", supplierId: "s-024", supplierName: "Pacific Trade Solutions", type: "kickback",
-    severity: "high", status: "investigating", description: "Procurement officer personal bank account received wire transfers totalling ₹69.7L from this vendor within 30 days of contract award.",
-    anomalyScore: 0.93, detectedAt: new Date(Date.now() - 72 * 3600000).toISOString(), resolvedAt: null,
-  },
-  {
-    id: "fa-007", supplierId: "s-025", supplierName: "Horizon Electronics", type: "invoice_duplication",
-    severity: "low", status: "resolved", description: "Duplicate invoice submitted. Vendor confirmed accounting system error. Credit note issued.",
-    anomalyScore: 0.71, detectedAt: new Date(Date.now() - 7 * 24 * 3600000).toISOString(), resolvedAt: new Date(Date.now() - 5 * 24 * 3600000).toISOString(),
-  },
-];
+const ML_API_URL =
+  process.env.ML_API_URL ?? "http://127.0.0.1:8000";
 
-router.get("/fraud/alerts", (req, res) => {
-  let alerts = [...FRAUD_ALERTS];
-  const { status, severity } = req.query;
-  if (status) alerts = alerts.filter(a => a.status === status);
-  if (severity) alerts = alerts.filter(a => a.severity === severity);
-  res.json(alerts);
+type Anomaly = {
+  vendor_id: string;
+  is_anomaly: boolean;
+  anomaly_score: number;
+  severity: string;
+};
+
+type AnomalyResponse = {
+  total_vendors: number;
+  total_anomalies: number;
+  anomalies: Anomaly[];
+};
+
+router.get("/fraud/alerts", async (req, res) => {
+  try {
+    const response = await fetch(
+      `${ML_API_URL}/fraud/anomalies`,
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      return res.status(response.status).json({
+        error: "ML fraud detection API failed",
+        details: errorText,
+      });
+    }
+
+    const data =
+      (await response.json()) as AnomalyResponse;
+
+    let alerts = data.anomalies.map(
+      (anomaly, index) => ({
+        id: `anomaly-${index + 1}`,
+        supplierId: anomaly.vendor_id,
+        supplierName: anomaly.vendor_id,
+        type: "vendor_anomaly",
+        severity: anomaly.severity,
+        status: "open",
+        description:
+          "Vendor behavior is statistically unusual compared with the normal vendor population.",
+        anomalyScore: anomaly.anomaly_score,
+        detectedAt: new Date().toISOString(),
+        resolvedAt: null,
+      }),
+    );
+
+    const { status, severity } = req.query;
+
+    if (status) {
+      alerts = alerts.filter(
+        (alert) =>
+          alert.status === status,
+      );
+    }
+
+    if (severity) {
+      alerts = alerts.filter(
+        (alert) =>
+          alert.severity === severity,
+      );
+    }
+
+    return res.json(alerts);
+  } catch (error) {
+    console.error(
+      "Fraud ML API error:",
+      error,
+    );
+
+    return res.status(500).json({
+      error: "Unable to fetch fraud anomalies",
+      details:
+        error instanceof Error
+          ? error.message
+          : "Unknown error",
+    });
+  }
 });
 
-router.post("/fraud/alerts/:id/resolve", (req, res) => {
-  const alert = FRAUD_ALERTS.find(a => a.id === req.params.id);
-  if (!alert) return res.status(404).json({ error: "Alert not found" });
-  const resolved = { ...alert, status: "resolved", resolvedAt: new Date().toISOString() };
-  res.json(resolved);
-});
+router.get(
+  "/fraud/alerts/:id",
+  async (req, res) => {
+    try {
+      const response = await fetch(
+        `${ML_API_URL}/fraud/vendor/${encodeURIComponent(
+          req.params.id,
+        )}`,
+      );
 
-router.get("/fraud/stats", (_req, res) => {
-  res.json({
-    totalAlerts: 34,
-    openAlerts: 7,
-    resolvedAlerts: 27,
-    fraudPreventedAmount: 4_280_000,
-    detectionRate: 0.94,
-    alertsByType: [
-      { type: "invoice_duplication", count: 12 },
-      { type: "shell_company", count: 5 },
-      { type: "bid_rigging", count: 6 },
-      { type: "price_manipulation", count: 4 },
-      { type: "kickback", count: 3 },
-      { type: "duplicate_vendor", count: 3 },
-      { type: "collusion", count: 1 },
-    ],
-  });
-});
+      if (response.status === 404) {
+        return res.status(404).json({
+          error: "Vendor not found",
+        });
+      }
+
+      if (!response.ok) {
+        const errorText =
+          await response.text();
+
+        return res.status(
+          response.status,
+        ).json({
+          error:
+            "ML fraud detection API failed",
+          details: errorText,
+        });
+      }
+
+      const anomaly =
+        (await response.json()) as Anomaly;
+
+      return res.json({
+        id: req.params.id,
+        supplierId: anomaly.vendor_id,
+        supplierName: anomaly.vendor_id,
+        type: "vendor_anomaly",
+        severity: anomaly.severity,
+        status: anomaly.is_anomaly
+          ? "open"
+          : "resolved",
+        description:
+          anomaly.is_anomaly
+            ? "Vendor behavior is statistically unusual compared with the normal vendor population."
+            : "No significant vendor anomaly detected.",
+        anomalyScore:
+          anomaly.anomaly_score,
+        detectedAt:
+          new Date().toISOString(),
+        resolvedAt:
+          anomaly.is_anomaly
+            ? null
+            : new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(
+        "Fraud vendor lookup error:",
+        error,
+      );
+
+      return res.status(500).json({
+        error:
+          "Unable to fetch vendor anomaly",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown error",
+      });
+    }
+  },
+);
+
+router.post(
+  "/fraud/alerts/:id/resolve",
+  (_req, res) => {
+    return res.status(501).json({
+      error:
+        "Fraud alert resolution is not persisted yet.",
+    });
+  },
+);
+
+router.get(
+  "/fraud/stats",
+  async (_req, res) => {
+    try {
+      const response = await fetch(
+        `${ML_API_URL}/fraud/anomalies`,
+      );
+
+      if (!response.ok) {
+        const errorText =
+          await response.text();
+
+        return res.status(
+          response.status,
+        ).json({
+          error:
+            "ML fraud detection API failed",
+          details: errorText,
+        });
+      }
+
+      const data =
+        (await response.json()) as AnomalyResponse;
+
+      const alertsBySeverity = {
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+      };
+
+      for (const anomaly of data.anomalies) {
+        if (
+          anomaly.severity in
+          alertsBySeverity
+        ) {
+          alertsBySeverity[
+            anomaly.severity as keyof typeof alertsBySeverity
+          ] += 1;
+        }
+      }
+
+      return res.json({
+        totalAlerts:
+          data.total_anomalies,
+        openAlerts:
+          data.total_anomalies,
+        resolvedAlerts: 0,
+        fraudPreventedAmount: 0,
+        detectionRate:
+          data.total_vendors > 0
+            ? Number(
+                (
+                  data.total_anomalies /
+                  data.total_vendors
+                ).toFixed(4),
+              )
+            : 0,
+        alertsByType: [
+          {
+            type: "vendor_anomaly",
+            count:
+              data.total_anomalies,
+          },
+        ],
+        alertsBySeverity,
+      });
+    } catch (error) {
+      console.error(
+        "Fraud stats error:",
+        error,
+      );
+
+      return res.status(500).json({
+        error:
+          "Unable to fetch fraud statistics",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown error",
+      });
+    }
+  },
+);
 
 export default router;

@@ -2,6 +2,8 @@ import { Router } from "express";
 
 const router = Router();
 
+const ML_API_URL = process.env.ML_API_URL ?? "http://127.0.0.1:8000";
+
 const RISK_SCORES = [
   { supplierId: "s-003", supplierName: "Foxconn", score: 78.4, riskLevel: "high", confidence: 0.91, updatedAt: new Date(Date.now() - 3600000).toISOString() },
   { supplierId: "s-013", supplierName: "Vale SA", score: 71.2, riskLevel: "high", confidence: 0.87, updatedAt: new Date(Date.now() - 7200000).toISOString() },
@@ -13,17 +15,263 @@ const RISK_SCORES = [
   { supplierId: "s-016", supplierName: "Petrobras", score: 55.8, riskLevel: "medium", confidence: 0.82, updatedAt: new Date(Date.now() - 5400000).toISOString() },
 ];
 
-router.get("/risk/scores", (req, res) => {
-  let scores = [...RISK_SCORES];
-  const { minScore, riskLevel } = req.query;
-  if (minScore) scores = scores.filter(s => s.score >= Number(minScore));
-  if (riskLevel) scores = scores.filter(s => s.riskLevel === riskLevel);
-  res.json(scores);
+const SUPPLIER_FEATURES: Record<string, Record<string, number>> = {
+  "s-003": {
+    revenue_growth: 0.02,
+    debt_to_equity: 2.1,
+    profit_margin: 0.06,
+    cash_flow_ratio: 0.9,
+    delivery_delay_rate: 0.18,
+    defect_rate: 0.08,
+    capacity_utilization: 0.91,
+    lead_time_variability: 0.22,
+    compliance_score: 0.72,
+    certification_count: 2,
+    regulatory_violations: 2,
+    security_incidents: 3,
+    data_breaches: 1,
+    security_score: 0.61,
+    customer_complaints: 12,
+    negative_news_count: 5,
+    sentiment_score: -0.25,
+    country_risk_score: 0.55,
+    geopolitical_exposure: 0.48,
+  },
+  "s-013": {
+    revenue_growth: 0.01,
+    debt_to_equity: 1.9,
+    profit_margin: 0.08,
+    cash_flow_ratio: 1.0,
+    delivery_delay_rate: 0.15,
+    defect_rate: 0.06,
+    capacity_utilization: 0.88,
+    lead_time_variability: 0.2,
+    compliance_score: 0.76,
+    certification_count: 3,
+    regulatory_violations: 1,
+    security_incidents: 2,
+    data_breaches: 0,
+    security_score: 0.68,
+    customer_complaints: 9,
+    negative_news_count: 4,
+    sentiment_score: -0.18,
+    country_risk_score: 0.58,
+    geopolitical_exposure: 0.52,
+  },
+  "s-014": {
+    revenue_growth: 0.04,
+    debt_to_equity: 1.5,
+    profit_margin: 0.1,
+    cash_flow_ratio: 1.2,
+    delivery_delay_rate: 0.1,
+    defect_rate: 0.04,
+    capacity_utilization: 0.82,
+    lead_time_variability: 0.15,
+    compliance_score: 0.82,
+    certification_count: 4,
+    regulatory_violations: 1,
+    security_incidents: 2,
+    data_breaches: 1,
+    security_score: 0.74,
+    customer_complaints: 6,
+    negative_news_count: 3,
+    sentiment_score: -0.05,
+    country_risk_score: 0.4,
+    geopolitical_exposure: 0.35,
+  },
+  "s-015": {
+    revenue_growth: -0.04,
+    debt_to_equity: 3.2,
+    profit_margin: 0.02,
+    cash_flow_ratio: 0.65,
+    delivery_delay_rate: 0.24,
+    defect_rate: 0.1,
+    capacity_utilization: 0.95,
+    lead_time_variability: 0.3,
+    compliance_score: 0.6,
+    certification_count: 1,
+    regulatory_violations: 4,
+    security_incidents: 4,
+    data_breaches: 2,
+    security_score: 0.48,
+    customer_complaints: 18,
+    negative_news_count: 8,
+    sentiment_score: -0.4,
+    country_risk_score: 0.7,
+    geopolitical_exposure: 0.65,
+  },
+  "s-002": {
+    revenue_growth: 0.08,
+    debt_to_equity: 1.2,
+    profit_margin: 0.12,
+    cash_flow_ratio: 1.5,
+    delivery_delay_rate: 0.08,
+    defect_rate: 0.03,
+    capacity_utilization: 0.75,
+    lead_time_variability: 0.12,
+    compliance_score: 0.9,
+    certification_count: 4,
+    regulatory_violations: 0,
+    security_incidents: 1,
+    data_breaches: 0,
+    security_score: 0.85,
+    customer_complaints: 3,
+    negative_news_count: 1,
+    sentiment_score: 0.7,
+    country_risk_score: 0.2,
+    geopolitical_exposure: 0.15,
+  },
+  "s-001": {
+    revenue_growth: 0.1,
+    debt_to_equity: 0.8,
+    profit_margin: 0.15,
+    cash_flow_ratio: 1.7,
+    delivery_delay_rate: 0.03,
+    defect_rate: 0.01,
+    capacity_utilization: 0.7,
+    lead_time_variability: 0.08,
+    compliance_score: 0.96,
+    certification_count: 6,
+    regulatory_violations: 0,
+    security_incidents: 0,
+    data_breaches: 0,
+    security_score: 0.95,
+    customer_complaints: 1,
+    negative_news_count: 0,
+    sentiment_score: 0.85,
+    country_risk_score: 0.1,
+    geopolitical_exposure: 0.08,
+  },
+  "s-004": {
+    revenue_growth: 0.07,
+    debt_to_equity: 1.0,
+    profit_margin: 0.14,
+    cash_flow_ratio: 1.55,
+    delivery_delay_rate: 0.04,
+    defect_rate: 0.02,
+    capacity_utilization: 0.73,
+    lead_time_variability: 0.1,
+    compliance_score: 0.94,
+    certification_count: 5,
+    regulatory_violations: 0,
+    security_incidents: 1,
+    data_breaches: 0,
+    security_score: 0.9,
+    customer_complaints: 2,
+    negative_news_count: 0,
+    sentiment_score: 0.8,
+    country_risk_score: 0.12,
+    geopolitical_exposure: 0.1,
+  },
+  "s-016": {
+    revenue_growth: 0.03,
+    debt_to_equity: 1.7,
+    profit_margin: 0.09,
+    cash_flow_ratio: 1.1,
+    delivery_delay_rate: 0.12,
+    defect_rate: 0.05,
+    capacity_utilization: 0.86,
+    lead_time_variability: 0.18,
+    compliance_score: 0.8,
+    certification_count: 3,
+    regulatory_violations: 1,
+    security_incidents: 2,
+    data_breaches: 0,
+    security_score: 0.7,
+    customer_complaints: 8,
+    negative_news_count: 3,
+    sentiment_score: 0.05,
+    country_risk_score: 0.45,
+    geopolitical_exposure: 0.4,
+  },
+};
+
+router.get("/risk/scores", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  
+  try {
+    const { minScore, riskLevel } = req.query;
+
+    const predictions = await Promise.all(
+      RISK_SCORES.map(async (supplier) => {
+        const features = SUPPLIER_FEATURES[supplier.supplierId];
+
+        if (!features) {
+          return supplier;
+        }
+
+        const response = await fetch(`${ML_API_URL}/predict`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            vendor_id: supplier.supplierId,
+            ...features,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `ML API returned ${response.status} for ${supplier.supplierId}`,
+          );
+        }
+
+        const prediction = (await response.json()) as {
+          vendor_id: string;
+          risk_category: string;
+          risk_label: number;
+          risk_probability: number;
+          decision_threshold: number;
+        };
+
+        return {
+          supplierId: supplier.supplierId,
+          supplierName: supplier.supplierName,
+          score: Number((prediction.risk_probability * 100).toFixed(1)),
+          riskLevel: String(prediction.risk_category).toLowerCase(),
+          confidence: Number(
+            Math.max(
+              prediction.risk_probability,
+              1 - prediction.risk_probability,
+            ).toFixed(2),
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    );
+
+    let scores = predictions;
+
+    if (minScore) {
+      scores = scores.filter(
+        (supplier) => supplier.score >= Number(minScore),
+      );
+    }
+
+    if (riskLevel) {
+      scores = scores.filter(
+        (supplier) => supplier.riskLevel === riskLevel,
+      );
+    }
+
+    res.json(scores);
+  } catch (error) {
+    console.error("Risk ML prediction failed:", error);
+
+    res.status(502).json({
+      error: "Unable to retrieve risk predictions from the ML service.",
+    });
+  }
 });
 
 router.get("/risk/explain/:supplierId", (req, res) => {
   const { supplierId } = req.params;
-  const score = RISK_SCORES.find(s => s.supplierId === supplierId) ?? RISK_SCORES[0];
+  const score =
+    RISK_SCORES.find((s) => s.supplierId === supplierId) ?? RISK_SCORES[0];
+
   res.json({
     supplierId: score.supplierId,
     supplierName: score.supplierName,

@@ -1,87 +1,883 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 
 const router = Router();
 
-const NEWS_ARTICLES = [
-  {
-    id: "n-001", title: "TSMC Reports Record Fab Utilization Amid AI Chip Demand Surge",
-    source: "Bloomberg", summary: "TSMC's advanced nodes are running at 95%+ utilization as hyperscalers accelerate AI infrastructure buildout, raising concerns about lead times for non-AI customers.",
-    sentiment: "positive", sentimentScore: 0.74, tags: ["semiconductors", "AI", "supply_chain"],
-    supplierId: "s-003", supplierName: "TSMC", publishedAt: new Date(Date.now() - 2 * 3600000).toISOString(), url: "https://example.com/tsmc-fab", impactLevel: "high",
-  },
-  {
-    id: "n-002", title: "Foxconn Factory in Zhengzhou Faces Labor Protest Over Bonus Disputes",
-    source: "Reuters", summary: "Approximately 200 workers staged a protest at the Zhengzhou iPhone assembly campus, disrupting production for an estimated 4-6 hours.",
-    sentiment: "negative", sentimentScore: -0.68, tags: ["manufacturing", "labor", "China"],
-    supplierId: "s-003", supplierName: "Foxconn", publishedAt: new Date(Date.now() - 18 * 3600000).toISOString(), url: "https://example.com/foxconn-protest", impactLevel: "medium",
-  },
-  {
-    id: "n-003", title: "BASF Expands Sustainable Chemistry Portfolio with €2B Investment",
-    source: "Financial Times", summary: "BASF announced a major push into bio-based feedstocks, targeting 25% renewable raw materials by 2030.",
-    sentiment: "positive", sentimentScore: 0.81, tags: ["chemicals", "ESG", "Germany"],
-    supplierId: "s-004", supplierName: "BASF SE", publishedAt: new Date(Date.now() - 36 * 3600000).toISOString(), url: "https://example.com/basf-sustainable", impactLevel: "low",
-  },
-  {
-    id: "n-004", title: "Vale Iron Ore Shipments Disrupted by Brazilian Port Strike",
-    source: "Wall Street Journal", summary: "Dockworkers at Tubarão port entered day 3 of strike action, halting approximately 18Mt of annual export capacity.",
-    sentiment: "negative", sentimentScore: -0.82, tags: ["mining", "logistics", "Brazil"],
-    supplierId: "s-013", supplierName: "Vale SA", publishedAt: new Date(Date.now() - 6 * 3600000).toISOString(), url: "https://example.com/vale-strike", impactLevel: "high",
-  },
-  {
-    id: "n-005", title: "Siemens Wins €1.2B Smart Grid Contract Across 6 European Countries",
-    source: "CNBC", summary: "The deal positions Siemens as the dominant grid automation supplier in EU's energy transition infrastructure program.",
-    sentiment: "positive", sentimentScore: 0.88, tags: ["industrial", "energy", "Europe"],
-    supplierId: "s-001", supplierName: "Siemens AG", publishedAt: new Date(Date.now() - 48 * 3600000).toISOString(), url: "https://example.com/siemens-grid", impactLevel: "low",
-  },
-  {
-    id: "n-006", title: "Geopolitical Risk Index Rises as Taiwan Strait Tensions Escalate",
-    source: "The Economist", summary: "Analysts warn that increased military exercises in the Taiwan Strait could disrupt 40% of global advanced chip supply within 90 days of any escalation.",
-    sentiment: "negative", sentimentScore: -0.91, tags: ["geopolitical", "semiconductors", "risk"],
-    supplierId: null, supplierName: null, publishedAt: new Date(Date.now() - 12 * 3600000).toISOString(), url: "https://example.com/taiwan-risk", impactLevel: "high",
-  },
-  {
-    id: "n-007", title: "Copper Prices Hit 18-Month High on Green Energy Demand",
-    source: "Commodity Insights", summary: "LME copper broke through ₹7.8L/mt as EV and grid infrastructure buildout consumed inventory faster than mine output could compensate.",
-    sentiment: "neutral", sentimentScore: 0.12, tags: ["commodities", "copper", "pricing"],
-    supplierId: null, supplierName: null, publishedAt: new Date(Date.now() - 30 * 3600000).toISOString(), url: "https://example.com/copper-prices", impactLevel: "medium",
-  },
-  {
-    id: "n-008", title: "EU Carbon Border Adjustment Mechanism Creates New Compliance Layer for Importers",
-    source: "EurActiv", summary: "From January 2026, all imports of steel, aluminium, cement, and chemicals must carry embedded carbon certificates, affecting 34 of VendorIQ's active suppliers.",
-    sentiment: "neutral", sentimentScore: -0.18, tags: ["ESG", "compliance", "EU"],
-    supplierId: null, supplierName: null, publishedAt: new Date(Date.now() - 72 * 3600000).toISOString(), url: "https://example.com/eu-cbam", impactLevel: "high",
-  },
+const GNEWS_API_URL = "https://gnews.io/api/v4/search";
+const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
+
+const OLLAMA_URL = "http://localhost:11434/api/generate";
+const OLLAMA_MODEL = "llama3.2:latest";
+
+const SEARCH_QUERY =
+  "procurement OR supplier OR sourcing OR manufacturing OR logistics OR semiconductor OR commodity OR tariff OR shipping";
+
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+let cachedNews: any[] | null = null;
+let cachedAt = 0;
+
+const RELEVANCE_KEYWORDS = [
+  "procurement",
+  "purchasing",
+  "supplier",
+  "suppliers",
+  "sourcing",
+  "supply chain",
+  "manufacturing",
+  "logistics",
+  "shipment",
+  "shipping",
+  "freight",
+  "warehouse",
+  "inventory",
+  "raw material",
+  "commodity",
+  "semiconductor",
+  "chip supply",
+  "production",
+  "factory",
+  "tariff",
+  "trade restriction",
+  "export control",
+  "import",
+  "port",
+  "container",
+  "shortage",
+  "lead time",
+  "cost pressure",
+  "material cost",
 ];
 
-router.get("/news", (req, res) => {
-  let articles = [...NEWS_ARTICLES];
-  const { sentiment, limit } = req.query;
-  if (sentiment) articles = articles.filter(a => a.sentiment === sentiment);
-  if (limit) articles = articles.slice(0, Number(limit));
-  res.json(articles);
-});
+const STRONG_RELEVANCE_KEYWORDS = [
+  "procurement",
+  "supplier",
+  "sourcing",
+  "manufacturing",
+  "semiconductor",
+  "commodity",
+  "raw material",
+  "tariff",
+  "export control",
+  "trade restriction",
+  "shortage",
+  "lead time",
+  "freight",
+  "shipping",
+  "inventory",
+];
 
-router.get("/news/supplier/:supplierId", (req, res) => {
-  const { supplierId } = req.params;
-  const articles = NEWS_ARTICLES.filter(a => a.supplierId === supplierId);
-  res.json(articles.length ? articles : NEWS_ARTICLES.slice(0, 2));
-});
+const IRRELEVANT_KEYWORDS = [
+  "war",
+  "military",
+  "missile",
+  "soldier",
+  "ukraine",
+  "russia",
+  "iran",
+  "iranian",
+  "gulf conflict",
+  "hormuz",
+  "strait of hormuz",
+  "ceasefire",
+  "peace plan",
+  "nuclear",
+  "election",
+  "politics",
+  "president",
+  "un general assembly",
+  "unga",
+  "murder",
+  "death",
+  "dead",
+  "crime",
+  "liquor",
+  "hooch",
+  "alcohol",
+  "celebrity",
+  "movie",
+  "sports",
+  "football",
+  "cricket",
+  "weather",
+  "horoscope",
+];
 
-router.get("/news/timeline", (_req, res) => {
-  const today = Date.now();
-  const DAY = 86400000;
-  const timeline = Array.from({ length: 30 }, (_, i) => {
-    const date = new Date(today - (29 - i) * DAY).toISOString().split("T")[0];
-    const articles = Math.floor(Math.random() * 8) + 2;
-    const avgSentiment = (Math.random() - 0.5) * 1.2;
-    const majorEvents: Record<string, string> = {
-      "2024-10-15": "Taiwan Strait escalation reports",
-      "2024-11-01": "EU CBAM enforcement announced",
-      "2024-11-08": "Foxconn labor dispute",
+const STOP_WORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "into",
+  "after",
+  "before",
+  "over",
+  "under",
+  "will",
+  "supply",
+  "chain",
+]);
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getTitleTokens(title: string): Set<string> {
+  return new Set(
+    normalizeText(title)
+      .split(" ")
+      .filter(
+        (token) =>
+          token.length > 2 &&
+          !STOP_WORDS.has(token),
+      ),
+  );
+}
+
+function calculateTitleSimilarity(
+  first: string,
+  second: string,
+): number {
+  const firstTokens = getTitleTokens(first);
+  const secondTokens = getTitleTokens(second);
+
+  if (
+    firstTokens.size === 0 ||
+    secondTokens.size === 0
+  ) {
+    return 0;
+  }
+
+  let intersection = 0;
+
+  for (const token of firstTokens) {
+    if (secondTokens.has(token)) {
+      intersection += 1;
+    }
+  }
+
+  const union = new Set([
+    ...firstTokens,
+    ...secondTokens,
+  ]).size;
+
+  return union === 0
+    ? 0
+    : intersection / union;
+}
+
+function getCombinedText(article: any): string {
+  return normalizeText(
+    `${article.title ?? ""} ${
+      article.description ?? ""
+    } ${article.content ?? ""}`,
+  );
+}
+
+function isProcurementRelevant(article: any): boolean {
+  const text = getCombinedText(article);
+
+  const strongMatches =
+    STRONG_RELEVANCE_KEYWORDS.filter(
+      (keyword) =>
+        text.includes(keyword),
+    );
+
+  const relevanceMatches =
+    RELEVANCE_KEYWORDS.filter(
+      (keyword) =>
+        text.includes(keyword),
+    );
+
+  const irrelevantMatches =
+    IRRELEVANT_KEYWORDS.filter(
+      (keyword) =>
+        text.includes(keyword),
+    );
+
+  if (irrelevantMatches.length > 0) {
+    const strategicSupplyChainMatch =
+      strongMatches.some((keyword) =>
+        [
+          "procurement",
+          "supplier",
+          "sourcing",
+          "manufacturing",
+          "semiconductor",
+          "commodity",
+          "raw material",
+          "tariff",
+          "export control",
+          "trade restriction",
+          "shortage",
+          "lead time",
+        ].includes(keyword),
+      );
+
+    if (!strategicSupplyChainMatch) {
+      return false;
+    }
+  }
+
+  if (strongMatches.length >= 1) {
+    return true;
+  }
+
+  return relevanceMatches.length >= 2;
+}
+
+function getEventKey(article: any): string {
+  const text = normalizeText(
+    `${article.title ?? ""} ${
+      article.description ?? ""
+    }`,
+  );
+
+  const eventGroups = [
+    {
+      key: "us_china_tariff_relief",
+      terms: [
+        "us china",
+        "trump xi",
+        "tariff relief",
+        "tariff cuts",
+        "favourable tariff",
+        "favorable tariff",
+      ],
+    },
+    {
+      key: "semiconductor_manufacturing",
+      terms: [
+        "semiconductor",
+        "chip manufacturing",
+        "chip supply",
+      ],
+    },
+    {
+      key: "medicine_procurement",
+      terms: [
+        "medicine procurement",
+        "medical procurement",
+        "pharmaceutical procurement",
+      ],
+    },
+    {
+      key: "commodity_supply",
+      terms: [
+        "commodity",
+        "raw material",
+        "material cost",
+        "commodity prices",
+      ],
+    },
+    {
+      key: "supplier_sourcing",
+      terms: [
+        "supplier",
+        "sourcing",
+        "procurement",
+      ],
+    },
+  ];
+
+  for (const group of eventGroups) {
+    const matches = group.terms.filter(
+      (term) =>
+        text.includes(term),
+    );
+
+    if (matches.length > 0) {
+      return group.key;
+    }
+  }
+
+  return [
+    ...getTitleTokens(
+      article.title ?? "",
+    ),
+  ]
+    .filter(
+      (token) =>
+        token.length >= 5,
+    )
+    .sort()
+    .slice(0, 8)
+    .join("|");
+}
+
+function deduplicateArticles(
+  articles: any[],
+): any[] {
+  const accepted: any[] = [];
+  const eventKeys = new Set<string>();
+
+  for (const article of articles) {
+    const eventKey =
+      getEventKey(article);
+
+    if (
+      eventKey &&
+      eventKeys.has(eventKey)
+    ) {
+      continue;
+    }
+
+    const duplicate =
+      accepted.some(
+        (existing) => {
+          const similarity =
+            calculateTitleSimilarity(
+              article.title ?? "",
+              existing.title ?? "",
+            );
+
+          return similarity >= 0.45;
+        },
+      );
+
+    if (duplicate) {
+      continue;
+    }
+
+    if (eventKey) {
+      eventKeys.add(eventKey);
+    }
+
+    accepted.push(article);
+  }
+
+  return accepted;
+}
+
+function classifyImpact(
+  sentimentScore: number,
+  article: any,
+): string {
+  const text =
+    getCombinedText(article);
+
+  const highImpactKeywords = [
+    "shortage",
+    "tariff",
+    "export control",
+    "trade restriction",
+    "factory shutdown",
+    "production halt",
+    "supply disruption",
+    "shipping disruption",
+    "port closure",
+    "commodity prices",
+    "material cost",
+    "semiconductor shortage",
+  ];
+
+  const hasHighImpactKeyword =
+    highImpactKeywords.some(
+      (keyword) =>
+        text.includes(keyword),
+    );
+
+  if (
+    hasHighImpactKeyword ||
+    Math.abs(sentimentScore) >= 0.75
+  ) {
+    return "high";
+  }
+
+  if (
+    Math.abs(sentimentScore) >= 0.35
+  ) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+async function analyzeSentiment(
+  text: string,
+): Promise<{
+  sentiment: string;
+  sentimentScore: number;
+}> {
+  const prompt = `
+Analyze the sentiment of this procurement and supply-chain news article.
+
+Return JSON only.
+
+Allowed sentiment values:
+positive
+neutral
+negative
+
+Return:
+{
+  "sentiment": "positive",
+  "sentimentScore": 0.0
+}
+
+The score must be between -1 and 1.
+
+Article:
+${text}
+`;
+
+  try {
+    const response =
+      await fetch(
+        OLLAMA_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            model: OLLAMA_MODEL,
+            prompt,
+            stream: false,
+            format: "json",
+            options: {
+              temperature: 0,
+            },
+          }),
+        },
+      );
+
+    if (!response.ok) {
+      return {
+        sentiment: "neutral",
+        sentimentScore: 0,
+      };
+    }
+
+    const data =
+      (await response.json()) as {
+        response?: string;
+      };
+
+    if (!data.response) {
+      return {
+        sentiment: "neutral",
+        sentimentScore: 0,
+      };
+    }
+
+    const parsed =
+      JSON.parse(
+        data.response,
+      ) as {
+        sentiment?: string;
+        sentimentScore?: number;
+      };
+
+    const sentiment =
+      parsed.sentiment ===
+        "positive" ||
+      parsed.sentiment ===
+        "negative" ||
+      parsed.sentiment ===
+        "neutral"
+        ? parsed.sentiment
+        : "neutral";
+
+    const score = Number(
+      parsed.sentimentScore,
+    );
+
+    return {
+      sentiment,
+      sentimentScore:
+        Number.isFinite(score)
+          ? Math.max(
+              -1,
+              Math.min(1, score),
+            )
+          : 0,
     };
-    return { date, articles, avgSentiment: Math.round(avgSentiment * 100) / 100, majorEvent: majorEvents[date] ?? null };
-  });
-  res.json(timeline);
-});
+  } catch {
+    return {
+      sentiment: "neutral",
+      sentimentScore: 0,
+    };
+  }
+}
+
+async function fetchNews(): Promise<any[]> {
+  if (
+    cachedNews &&
+    Date.now() - cachedAt <
+      CACHE_TTL_MS
+  ) {
+    return cachedNews;
+  }
+
+  if (!GNEWS_API_KEY) {
+    throw new Error(
+      "GNEWS_API_KEY is not configured.",
+    );
+  }
+
+  const url =
+    new URL(GNEWS_API_URL);
+
+  url.searchParams.set(
+    "q",
+    SEARCH_QUERY,
+  );
+
+  url.searchParams.set(
+    "lang",
+    "en",
+  );
+
+  url.searchParams.set(
+    "max",
+    "10",
+  );
+
+  url.searchParams.set(
+    "sortby",
+    "publishedAt",
+  );
+
+  url.searchParams.set(
+    "apikey",
+    GNEWS_API_KEY,
+  );
+
+  const response =
+    await fetch(
+      url.toString(),
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      `GNews request failed with HTTP ${response.status}`,
+    );
+  }
+
+  const data =
+    (await response.json()) as {
+      articles?: any[];
+    };
+
+  const rawArticles =
+    Array.isArray(
+      data.articles,
+    )
+      ? data.articles
+      : [];
+
+  const relevantArticles =
+    rawArticles.filter(
+      isProcurementRelevant,
+    );
+
+  const uniqueArticles =
+    deduplicateArticles(
+      relevantArticles,
+    );
+
+  const enrichedArticles =
+    await Promise.all(
+      uniqueArticles.map(
+        async (article) => {
+          const sentiment =
+            await analyzeSentiment(
+              `${article.title ?? ""}\n${
+                article.description ??
+                ""
+              }`,
+            );
+
+          return {
+            id: crypto
+              .createHash("md5")
+              .update(
+                article.url ??
+                  article.title ??
+                  "",
+              )
+              .digest("hex"),
+
+            title:
+              article.title ??
+              "Untitled article",
+
+            source:
+              article.source?.name ??
+              "Unknown source",
+
+            summary:
+              article.description ??
+              article.content ??
+              "No summary available.",
+
+            sentiment:
+              sentiment.sentiment,
+
+            sentimentScore:
+              Number(
+                sentiment.sentimentScore.toFixed(
+                  2,
+                ),
+              ),
+
+            tags: [
+              "supply_chain",
+              "market_intelligence",
+            ],
+
+            supplierId: null,
+            supplierName: null,
+
+            publishedAt:
+              article.publishedAt ??
+              new Date().toISOString(),
+
+            url:
+              article.url ?? "#",
+
+            impactLevel:
+              classifyImpact(
+                sentiment.sentimentScore,
+                article,
+              ),
+          };
+        },
+      ),
+    );
+
+  cachedNews =
+    enrichedArticles;
+
+  cachedAt =
+    Date.now();
+
+  return enrichedArticles;
+}
+
+router.get(
+  "/news",
+  async (req, res) => {
+    try {
+      const limit =
+        Math.min(
+          Math.max(
+            Number.parseInt(
+              String(
+                req.query.limit ??
+                  "10",
+              ),
+              10,
+            ) || 10,
+            1,
+          ),
+          10,
+        );
+
+      const news =
+        await fetchNews();
+
+      res.set(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, proxy-revalidate",
+      );
+
+      res.set(
+        "Pragma",
+        "no-cache",
+      );
+
+      res.set(
+        "Expires",
+        "0",
+      );
+
+      res.json({
+        value:
+          news.slice(
+            0,
+            limit,
+          ),
+
+        Count:
+          Math.min(
+            news.length,
+            limit,
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "News fetch failed:",
+        error,
+      );
+
+      res.status(500).json({
+        message:
+          "Unable to fetch current market intelligence news.",
+      });
+    }
+  },
+);
+
+router.get(
+  "/news/supplier/:supplierId",
+  async (
+    req,
+    res,
+  ) => {
+    try {
+      const news =
+        await fetchNews();
+
+      const supplierNews =
+        news.filter(
+          (article) =>
+            article.supplierId ===
+            req.params.supplierId,
+        );
+
+      res.json({
+        value:
+          supplierNews,
+        Count:
+          supplierNews.length,
+      });
+    } catch (error) {
+      console.error(
+        "Supplier news fetch failed:",
+        error,
+      );
+
+      res.status(500).json({
+        message:
+          "Unable to fetch supplier news.",
+      });
+    }
+  },
+);
+
+router.get(
+  "/news/timeline",
+  async (
+    _req,
+    res,
+  ) => {
+    try {
+      const news =
+        await fetchNews();
+
+      const timelineMap =
+        new Map<
+          string,
+          {
+            date: string;
+            positive: number;
+            neutral: number;
+            negative: number;
+          }
+        >();
+
+      for (const article of news) {
+        const date =
+          new Date(
+            article.publishedAt,
+          )
+            .toISOString()
+            .slice(0, 10);
+
+        if (
+          !timelineMap.has(
+            date,
+          )
+        ) {
+          timelineMap.set(
+            date,
+            {
+              date,
+              positive: 0,
+              neutral: 0,
+              negative: 0,
+            },
+          );
+        }
+
+        const entry =
+          timelineMap.get(
+            date,
+          )!;
+
+        if (
+          article.sentiment ===
+          "positive"
+        ) {
+          entry.positive +=
+            1;
+        } else if (
+          article.sentiment ===
+          "negative"
+        ) {
+          entry.negative +=
+            1;
+        } else {
+          entry.neutral +=
+            1;
+        }
+      }
+
+      const timeline =
+        [
+          ...timelineMap.values(),
+        ].sort(
+          (a, b) =>
+            new Date(
+              a.date,
+            ).getTime() -
+            new Date(
+              b.date,
+            ).getTime(),
+        );
+
+      res.set(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, proxy-revalidate",
+      );
+
+      res.set(
+        "Pragma",
+        "no-cache",
+      );
+
+      res.set(
+        "Expires",
+        "0",
+      );
+
+      res.json({
+        value: timeline,
+        Count:
+          timeline.length,
+      });
+    } catch (error) {
+      console.error(
+        "News timeline fetch failed:",
+        error,
+      );
+
+      res.status(500).json({
+        message:
+          "Unable to fetch news timeline.",
+      });
+    }
+  },
+);
 
 export default router;

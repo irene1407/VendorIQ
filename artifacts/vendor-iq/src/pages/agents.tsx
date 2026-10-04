@@ -2,10 +2,19 @@ import {
   useListAgentStatuses,
   useQueryAgent,
   useRunAgent,
+  getListAgentStatusesQueryKey,
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
 import {
   Bot,
   Sparkles,
@@ -17,9 +26,16 @@ import {
   AlertTriangle,
   ExternalLink,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+
+import {
+  useState,
+  useRef,
+  useEffect,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
-import { getListAgentStatusesQueryKey } from "@workspace/api-client-react";
 
 type Message = {
   role: "user" | "agent";
@@ -28,39 +44,98 @@ type Message = {
   sources?: string[];
 };
 
-const AGENT_ICON: Record<string, React.ReactNode> = {
-  risk_analyst:       <ShieldCheck className="h-5 w-5 text-destructive" />,
-  price_forecaster:   <TrendingUp className="h-5 w-5 text-primary" />,
-  contract_analyst:   <FileText className="h-5 w-5 text-blue-400" />,
-  fraud_investigator: <AlertTriangle className="h-5 w-5 text-amber-400" />,
-  procurement_copilot:<Sparkles className="h-5 w-5 text-emerald-400" />,
+const AGENT_ICON: Record<string, ReactNode> = {
+  risk_analyst: (
+    <ShieldCheck className="h-5 w-5 text-destructive" />
+  ),
+
+  price_forecaster: (
+    <TrendingUp className="h-5 w-5 text-primary" />
+  ),
+
+  contract_analyst: (
+    <FileText className="h-5 w-5 text-blue-400" />
+  ),
+
+  fraud_investigator: (
+    <AlertTriangle className="h-5 w-5 text-amber-400" />
+  ),
+
+  procurement_copilot: (
+    <Sparkles className="h-5 w-5 text-emerald-400" />
+  ),
 };
 
 const AGENT_DESCRIPTION: Record<string, string> = {
-  "agent-risk":     "Re-scores all suppliers against latest ESG, geopolitical, and payment data. Results appear on the Risk Intelligence page.",
-  "agent-price":    "Fetches LME spot prices and retrains the commodity forecasting model. Results appear on the Price Intelligence page.",
-  "agent-contract": "Scans active contracts for compliance gaps, auto-renewal traps, and SLA risks. Results appear on the Contracts page.",
-  "agent-fraud":    "Runs duplicate-invoice checks and bid-pattern analysis across recent AP data. Alerts surface on the Fraud Detection page.",
-  "agent-copilot":  "Syncs embeddings and refreshes the procurement knowledge base used by this Copilot chat.",
+  "agent-risk":
+    "Re-scores all suppliers against the trained vendor-risk model. Results appear on the Risk Intelligence page.",
+
+  "agent-price":
+    "Runs the commodity forecasting workflow using World Bank price data and the XGBoost forecasting model. Results appear on the Price Intelligence page.",
+
+  "agent-contract":
+    "Analyzes active contracts for compliance gaps, missing clauses, risk areas, and SLA issues using local Ollama NLP. Results appear on the Contracts page.",
+
+  "agent-fraud":
+    "Runs the vendor anomaly detector across procurement data and surfaces suspicious patterns as anomaly alerts. Results appear on the Fraud Detection page.",
+
+  "agent-copilot":
+    "Provides procurement intelligence through the Copilot interface using the available supplier, risk, contract, fraud, and market data.",
 };
 
 export default function Agents() {
   const queryClient = useQueryClient();
-  const { data: agents, isLoading } = useListAgentStatuses({
-    query: { refetchInterval: 5000 },
+
+  const {
+    data: agents,
+    isLoading,
+  } = useListAgentStatuses({
+    query: {
+      queryKey: ["agent-status"],
+      refetchInterval: 5000,
+    },
   });
 
+  /*
+   * Always normalize the API response before using it.
+   * This keeps the rest of the component type-safe.
+   */
+  const agentsList = Array.isArray(agents) ? agents : [];
+
+  /*
+   * IMPORTANT:
+   * AgentStatusStatus does not contain "completed".
+   * Valid statuses used by the API are handled here as:
+   * running, idle, error.
+   */
+  const runningCount = agentsList.filter(
+    (agent) => agent.status === "running",
+  ).length;
+
+  const errorCount = agentsList.filter(
+    (agent) => agent.status === "error",
+  ).length;
+
+  const idleCount = agentsList.filter(
+    (agent) => agent.status === "idle",
+  ).length;
+
   const [query, setQuery] = useState("");
+
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "agent",
       content:
-        "Hello. I'm your Procurement Copilot. I have access to all supplier data, risk models, and contract intel. How can I help you today?",
+        "Hello. I'm your Procurement Copilot. I have access to your supplier data, risk models, contract intelligence, fraud alerts, and market intelligence. How can I help you today?",
     },
   ]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { mutate: sendQuery, isPending: isQuerying } = useQueryAgent({
+  const {
+    mutate: sendQuery,
+    isPending: isQuerying,
+  } = useQueryAgent({
     mutation: {
       onSuccess(data) {
         setMessages((prev) => [
@@ -73,6 +148,7 @@ export default function Agents() {
           },
         ]);
       },
+
       onError() {
         setMessages((prev) => [
           ...prev,
@@ -88,186 +164,353 @@ export default function Agents() {
 
   const [runError, setRunError] = useState<string | null>(null);
 
-  const { mutate: runAgent, isPending: isStartingAgent, variables: startingVars } = useRunAgent({
+  const {
+    mutate: runAgent,
+    isPending: isStartingAgent,
+    variables: startingVars,
+  } = useRunAgent({
     mutation: {
       onSuccess(data) {
         setRunError(null);
-        // Seed the cache immediately so the UI flips to "running" without
-        // waiting for the next 5s poll, then invalidate to resync with the server.
+
         queryClient.setQueryData(
           getListAgentStatusesQueryKey(),
           (old: typeof agents) =>
-            old?.map((a) => (a.id === data.id ? { ...a, ...data } : a)),
+            old?.map((agent) =>
+              agent.id === data.id
+                ? {
+                    ...agent,
+                    ...data,
+                  }
+                : agent,
+            ),
         );
+
         queryClient.invalidateQueries({
           queryKey: getListAgentStatusesQueryKey(),
         });
       },
+
       onError() {
-        setRunError("Couldn't start the agent — please try again.");
+        setRunError(
+          "Couldn't start the agent. Please try again.",
+        );
       },
     },
   });
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [messages, isQuerying]);
 
   const buildHistory = () =>
-    messages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+    messages.slice(-8).map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
 
-  const handleQuery = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleQuery = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     const trimmed = query.trim();
-    if (!trimmed || isQuerying) return;
+
+    if (!trimmed || isQuerying) {
+      return;
+    }
+
     const history = buildHistory();
-    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: trimmed,
+      },
+    ]);
+
     setQuery("");
+
     sendQuery({
-      data: { message: trimmed, agentType: "procurement_copilot", context: { history } },
+      data: {
+        message: trimmed,
+        agentType: "procurement_copilot",
+        context: {
+          history,
+        },
+      },
     });
   };
 
   const handleChip = (text: string) => {
+    if (isQuerying) {
+      return;
+    }
+
     const history = buildHistory();
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: text,
+      },
+    ]);
+
     sendQuery({
-      data: { message: text, agentType: "procurement_copilot", context: { history } },
+      data: {
+        message: text,
+        agentType: "procurement_copilot",
+        context: {
+          history,
+        },
+      },
     });
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100vh-8rem)] flex flex-col">
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-display font-bold tracking-tight">
-          AI Agent Hub
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-display font-bold tracking-tight">
+            AI Agent Hub
+          </h1>
+
+          <Badge
+            variant="outline"
+            className="text-xs"
+          >
+            {agentsList.length} agents
+          </Badge>
+        </div>
+
         <p className="text-muted-foreground">
-          Autonomous specialized agents monitoring your procurement network 24/7.
+          Autonomous specialized agents monitoring your procurement network.
         </p>
+      </div>
+
+      {/* Agent status summary */}
+      <div className="grid grid-cols-3 gap-3 md:w-[520px]">
+        <Card className="bg-card/50 backdrop-blur border-border/10">
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              Running
+            </div>
+
+            <div className="text-xl font-bold text-primary mt-1">
+              {runningCount}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 backdrop-blur border-border/10">
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              Idle
+            </div>
+
+            <div className="text-xl font-bold mt-1">
+              {idleCount}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 backdrop-blur border-border/10">
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">
+              Errors
+            </div>
+
+            <div
+              className={`text-xl font-bold mt-1 ${
+                errorCount > 0
+                  ? "text-destructive"
+                  : "text-foreground"
+              }`}
+            >
+              {errorCount}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Agent cards */}
       <div className="grid gap-4 md:grid-cols-5">
-        {isLoading
-          ? Array(5)
-              .fill(0)
-              .map((_, i) => (
-                <Card
-                  key={i}
-                  className="h-36 bg-muted/20 animate-pulse border-border/10"
-                />
-              ))
-          : agents?.map((agent) => {
-              const isRunning = agent.status === "running";
-              const isIdle = agent.status === "idle";
-              return (
-                <Card
-                  key={agent.id}
-                  className={`bg-card/50 backdrop-blur border-border/10 relative overflow-hidden flex flex-col ${
-                    isRunning ? "ring-1 ring-primary/50" : ""
-                  }`}
-                >
-                  {/* Running progress bar */}
-                  {isRunning && (
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary/30 overflow-hidden">
-                      <div className="h-full bg-primary w-1/3 animate-[slide_1.5s_ease-in-out_infinite]" />
+        {isLoading ? (
+          Array(5)
+            .fill(0)
+            .map((_, index) => (
+              <Card
+                key={index}
+                className="h-36 bg-muted/20 animate-pulse border-border/10"
+              />
+            ))
+        ) : agentsList.length === 0 ? (
+          <Card className="md:col-span-5 bg-card/50 backdrop-blur border-border/10">
+            <CardContent className="p-8 text-center">
+              <Bot className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
+
+              <p className="text-sm text-muted-foreground">
+                No agent statuses are available.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          agentsList.map((agent) => {
+            const isRunning = agent.status === "running";
+            const isIdle = agent.status === "idle";
+
+            const isStarting =
+              isStartingAgent &&
+              startingVars?.agentId === agent.id;
+
+            return (
+              <Card
+                key={agent.id}
+                className={`bg-card/50 backdrop-blur border-border/10 relative overflow-hidden flex flex-col ${
+                  isRunning
+                    ? "ring-1 ring-primary/50"
+                    : ""
+                }`}
+              >
+                {/* Running progress bar */}
+                {isRunning && (
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary/30 overflow-hidden">
+                    <div className="h-full bg-primary w-1/3 animate-[slide_1.5s_ease-in-out_infinite]" />
+                  </div>
+                )}
+
+                <CardContent className="p-4 flex-1 flex flex-col gap-2">
+                  <div className="flex justify-between items-start">
+                    {AGENT_ICON[agent.type] ?? (
+                      <Bot className="h-5 w-5 text-muted-foreground" />
+                    )}
+
+                    <Badge
+                      variant={
+                        isRunning
+                          ? "default"
+                          : agent.status === "error"
+                            ? "destructive"
+                            : "outline"
+                      }
+                      className="text-[10px]"
+                    >
+                      {agent.status.toUpperCase()}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-sm">
+                      {agent.name}
+                    </h3>
+
+                    <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                      {agent.tasksCompleted.toLocaleString()} tasks done
+                    </div>
+                  </div>
+
+                  {isRunning && agent.currentTask && (
+                    <div className="text-[11px] text-primary/80 leading-tight italic truncate">
+                      {agent.currentTask}
                     </div>
                   )}
 
-                  <CardContent className="p-4 flex-1 flex flex-col gap-2">
-                    <div className="flex justify-between items-start">
-                      {AGENT_ICON[agent.type] ?? (
-                        <Bot className="h-5 w-5 text-muted-foreground" />
-                      )}
-                      <Badge
-                        variant={
-                          isRunning
-                            ? "default"
-                            : agent.status === "error"
-                            ? "destructive"
-                            : "outline"
-                        }
-                        className="text-[10px]"
+                  {/* Run button */}
+                  {isIdle && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-auto h-7 text-xs gap-1 border-border/30 hover:border-primary/50 hover:bg-primary/10 disabled:opacity-60"
+                        disabled={isStarting}
+                        onClick={() => {
+                          setRunError(null);
+
+                          runAgent({
+                            agentId: agent.id,
+                          });
+                        }}
                       >
-                        {agent.status.toUpperCase()}
-                      </Badge>
-                    </div>
+                        {isStarting ? (
+                          <>
+                            <div className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
 
-                    <div>
-                      <h3 className="font-semibold text-sm">{agent.name}</h3>
-                      <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                        {agent.tasksCompleted.toLocaleString()} tasks done
-                      </div>
-                    </div>
+                            Starting...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-3 w-3" />
 
-                    {isRunning && agent.currentTask && (
-                      <div className="text-[11px] text-primary/80 leading-tight italic truncate">
-                        {agent.currentTask}
-                      </div>
-                    )}
-
-                    {/* Run button for idle agents */}
-                    {isIdle && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-auto h-7 text-xs gap-1 border-border/30 hover:border-primary/50 hover:bg-primary/10 disabled:opacity-60"
-                          disabled={isStartingAgent && startingVars?.agentId === agent.id}
-                          onClick={() => {
-                            setRunError(null);
-                            runAgent({ agentId: agent.id });
-                          }}
-                        >
-                          {isStartingAgent && startingVars?.agentId === agent.id ? (
-                            <>
-                              <div className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                              Starting...
-                            </>
-                          ) : (
-                            <>
-                              <Play className="h-3 w-3" />
-                              Run now
-                            </>
-                          )}
-                        </Button>
-                        {runError && startingVars?.agentId === agent.id && (
-                          <div className="text-[10px] text-destructive mt-1">{runError}</div>
+                            Run now
+                          </>
                         )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      </Button>
+
+                      {runError &&
+                        startingVars?.agentId ===
+                          agent.id && (
+                          <div className="text-[10px] text-destructive mt-1">
+                            {runError}
+                          </div>
+                        )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
 
-      {/* What do agents do? — collapsed info row */}
+      {/* Agent descriptions */}
       <details className="group">
         <summary className="text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors list-none flex items-center gap-1">
-          <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
+          <span className="group-open:rotate-90 transition-transform inline-block">
+            ▶
+          </span>
+
           What does each agent do, and where do results appear?
         </summary>
+
         <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-4 text-xs text-muted-foreground">
-          {agents
-            ?.filter((a) => a.type !== "procurement_copilot")
-            .map((a) => (
-              <div key={a.id} className="p-3 rounded-lg bg-muted/10 border border-border/10">
-                <div className="font-semibold text-foreground mb-1">{a.name}</div>
-                {AGENT_DESCRIPTION[a.id]}
+          {agentsList
+            .filter(
+              (agent) =>
+                agent.type !== "procurement_copilot",
+            )
+            .map((agent) => (
+              <div
+                key={agent.id}
+                className="p-3 rounded-lg bg-muted/10 border border-border/10"
+              >
+                <div className="font-semibold text-foreground mb-1">
+                  {agent.name}
+                </div>
+
+                {AGENT_DESCRIPTION[agent.id] ??
+                  "Specialized procurement intelligence agent."}
               </div>
             ))}
         </div>
       </details>
 
-      {/* Copilot chat */}
+      {/* Procurement Copilot */}
       <Card className="flex-1 bg-card/50 backdrop-blur border-border/10 flex flex-col overflow-hidden shadow-xl shadow-black/20">
         <CardHeader className="border-b border-border/10 bg-muted/10 py-3 shrink-0">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">Procurement Copilot</CardTitle>
-            <Badge variant="outline" className="text-[10px] ml-auto">
+
+            <CardTitle className="text-lg">
+              Procurement Copilot
+            </CardTitle>
+
+            <Badge
+              variant="outline"
+              className="text-[10px] ml-auto"
+            >
               keyword-aware · 5 agents
             </Badge>
           </div>
@@ -276,50 +519,61 @@ export default function Agents() {
         <CardContent className="flex-1 p-0 flex flex-col bg-background/50 min-h-0">
           {/* Messages */}
           <div className="flex-1 p-6 overflow-y-auto space-y-5">
-            {messages.map((msg, i) => (
+            {messages.map((message, index) => (
               <div
-                key={i}
+                key={index}
                 className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
+                  message.role === "user"
+                    ? "justify-end"
+                    : "justify-start"
                 }`}
               >
                 <div
                   className={`max-w-[80%] p-4 rounded-xl text-sm leading-relaxed ${
-                    msg.role === "user"
+                    message.role === "user"
                       ? "bg-primary text-primary-foreground rounded-tr-sm"
                       : "bg-muted/30 border border-border/20 text-foreground rounded-tl-sm"
                   }`}
                 >
-                  {msg.role === "agent" && (
+                  {message.role === "agent" && (
                     <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border/10">
                       <Bot className="h-4 w-4 text-primary" />
+
                       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Copilot
                       </span>
-                      {msg.confidence != null && (
+
+                      {message.confidence != null && (
                         <span className="ml-auto text-[10px] font-mono text-muted-foreground">
-                          {(msg.confidence * 100).toFixed(0)}% confidence
+                          {(
+                            message.confidence * 100
+                          ).toFixed(0)}
+                          % confidence
                         </span>
                       )}
                     </div>
                   )}
 
-                  {msg.content}
+                  {message.content}
 
                   {/* Sources */}
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 pt-2 border-t border-border/10 flex flex-wrap gap-1">
-                      {msg.sources.map((s, j) => (
-                        <span
-                          key={j}
-                          className="inline-flex items-center gap-0.5 text-[10px] bg-muted/30 border border-border/20 rounded px-1.5 py-0.5 font-mono text-muted-foreground"
-                        >
-                          <ExternalLink className="h-2.5 w-2.5" />
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {message.sources &&
+                    message.sources.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-border/10 flex flex-wrap gap-1">
+                        {message.sources.map(
+                          (source, sourceIndex) => (
+                            <span
+                              key={sourceIndex}
+                              className="inline-flex items-center gap-0.5 text-[10px] bg-muted/30 border border-border/20 rounded px-1.5 py-0.5 font-mono text-muted-foreground"
+                            >
+                              <ExternalLink className="h-2.5 w-2.5" />
+
+                              {source}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    )}
                 </div>
               </div>
             ))}
@@ -330,33 +584,48 @@ export default function Agents() {
                 <div className="bg-muted/30 border border-border/20 rounded-xl rounded-tl-sm p-4 w-16 flex justify-center items-center gap-1">
                   <div
                     className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                    style={{ animationDelay: "0ms" }}
+                    style={{
+                      animationDelay: "0ms",
+                    }}
                   />
+
                   <div
                     className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                    style={{ animationDelay: "150ms" }}
+                    style={{
+                      animationDelay: "150ms",
+                    }}
                   />
+
                   <div
                     className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                    style={{ animationDelay: "300ms" }}
+                    style={{
+                      animationDelay: "300ms",
+                    }}
                   />
                 </div>
               </div>
             )}
+
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input bar */}
+          {/* Input */}
           <div className="p-4 bg-muted/20 border-t border-border/10 shrink-0">
-            <form onSubmit={handleQuery} className="relative flex items-center">
+            <form
+              onSubmit={handleQuery}
+              className="relative flex items-center"
+            >
               <input
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(event) =>
+                  setQuery(event.target.value)
+                }
                 placeholder="Ask about a supplier, risk factor, or market trend..."
                 disabled={isQuerying}
                 className="w-full bg-background border border-border/30 rounded-lg pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all shadow-sm disabled:opacity-50"
               />
+
               <Button
                 type="submit"
                 size="icon"
@@ -380,7 +649,9 @@ export default function Agents() {
                   key={chip}
                   variant="outline"
                   className="cursor-pointer hover:bg-muted whitespace-nowrap shrink-0"
-                  onClick={() => !isQuerying && handleChip(chip)}
+                  onClick={() =>
+                    !isQuerying && handleChip(chip)
+                  }
                 >
                   {chip}
                 </Badge>

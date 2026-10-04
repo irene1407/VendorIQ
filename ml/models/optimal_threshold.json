@@ -1,0 +1,5 @@
+{
+    "threshold": 0.30999999999999994,
+    "model": "random_forest",
+    "optimization_metric": "F2"
+}

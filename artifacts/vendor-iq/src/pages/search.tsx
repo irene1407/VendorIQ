@@ -1,106 +1,407 @@
 import { useSemanticSearch } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search as SearchIcon, Loader2, FileText, Users, Newspaper, ShieldAlert } from "lucide-react";
-import { useState, useEffect } from "react";
+import {
+  Search as SearchIcon,
+  Loader2,
+  FileText,
+  Users,
+  Newspaper,
+  ShieldAlert,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function Search() {
   const [query, setQuery] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+      window.location.search,
+    );
+
     return params.get("q") ?? "";
   });
-  const [hasSearched, setHasSearched] = useState(false);
+
+  const [hasSearched, setHasSearched] =
+    useState(false);
+
   const searchMutation = useSemanticSearch();
 
-  // Auto-trigger search when arriving with ?q= from the header bar
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+      window.location.search,
+    );
+
     const q = params.get("q");
+
     if (q && q.trim()) {
       setQuery(q);
       setHasSearched(true);
-      searchMutation.mutate({ data: { query: q } });
+
+      searchMutation.mutate({
+        data: {
+          query: q.trim(),
+        },
+      });
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const handleSearch = (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      return;
+    }
+
+    setQuery(trimmedQuery);
     setHasSearched(true);
-    searchMutation.mutate({ data: { query } });
+
+    const url = new URL(
+      window.location.href,
+    );
+
+    url.searchParams.set(
+      "q",
+      trimmedQuery,
+    );
+
+    window.history.replaceState(
+      {},
+      "",
+      url.toString(),
+    );
+
+    searchMutation.mutate({
+      data: {
+        query: trimmedQuery,
+      },
+    });
   };
 
-  const getIconForType = (type: string) => {
+  const clearSearch = () => {
+    setQuery("");
+    setHasSearched(false);
+
+    const url = new URL(
+      window.location.href,
+    );
+
+    url.searchParams.delete("q");
+
+    window.history.replaceState(
+      {},
+      "",
+      url.toString(),
+    );
+  };
+
+  const getIconForType = (
+    type: string,
+  ) => {
     switch (type) {
-      case 'contract': return <FileText className="h-4 w-4 text-blue-500" />;
-      case 'supplier': return <Users className="h-4 w-4 text-emerald-500" />;
-      case 'news': return <Newspaper className="h-4 w-4 text-muted-foreground" />;
-      case 'alert': return <ShieldAlert className="h-4 w-4 text-destructive" />;
-      default: return <SearchIcon className="h-4 w-4" />;
+      case "contract":
+        return (
+          <FileText className="h-5 w-5 text-blue-500" />
+        );
+
+      case "supplier":
+        return (
+          <Users className="h-5 w-5 text-emerald-500" />
+        );
+
+      case "news":
+        return (
+          <Newspaper className="h-5 w-5 text-amber-500" />
+        );
+
+      case "alert":
+        return (
+          <ShieldAlert className="h-5 w-5 text-destructive" />
+        );
+
+      default:
+        return (
+          <SearchIcon className="h-5 w-5 text-primary" />
+        );
     }
   };
 
+  const getTypeLabel = (
+    type: string,
+  ) => {
+    switch (type) {
+      case "contract":
+        return "Contract";
+
+      case "supplier":
+        return "Supplier";
+
+      case "news":
+        return "News";
+
+      case "alert":
+        return "Alert";
+
+      default:
+        return "Result";
+    }
+  };
+
+  const results = Array.isArray(
+    searchMutation.data,
+  )
+    ? searchMutation.data
+    : [];
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 py-8">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 py-8">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-display font-bold tracking-tight">Semantic Knowledge Search</h1>
+        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+          <SearchIcon className="h-3.5 w-3.5" />
+          VendorIQ Intelligence Search
+        </div>
+
+        <h1 className="text-4xl font-display font-bold tracking-tight">
+          Semantic Knowledge Search
+        </h1>
+
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Query contracts, news, and supplier data using natural language. The AI understands context, intent, and relationships.
+          Search across contracts, suppliers, news,
+          and alerts using natural-language queries.
         </p>
       </div>
 
-      <form onSubmit={handleSearch} className="relative group">
+      <form
+        onSubmit={handleSearch}
+        className="relative group"
+      >
         <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 rounded-xl blur-xl opacity-50 group-focus-within:opacity-100 transition-opacity" />
+
         <div className="relative flex items-center bg-background rounded-xl border border-border/20 shadow-2xl">
           <SearchIcon className="absolute left-6 h-6 w-6 text-muted-foreground" />
+
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder='Try "Show me clauses related to force majeure for Asian suppliers"'
-            className="w-full bg-transparent border-none py-6 pl-16 pr-6 text-lg focus:ring-0 outline-none rounded-xl"
+            onChange={(event) =>
+              setQuery(event.target.value)
+            }
+            placeholder='Try "force majeure clauses for Asian suppliers"'
+            className="w-full bg-transparent border-none py-6 pl-16 pr-24 text-lg focus:ring-0 outline-none rounded-xl"
           />
+
+          {query && !searchMutation.isPending && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="absolute right-14 p-2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+
           {searchMutation.isPending && (
             <Loader2 className="absolute right-6 h-6 w-6 text-primary animate-spin" />
           )}
         </div>
       </form>
 
+      {!hasSearched && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="bg-card/50 backdrop-blur border-border/10">
+            <CardContent className="p-5">
+              <FileText className="h-5 w-5 text-blue-500 mb-3" />
+
+              <h3 className="font-semibold">
+                Contracts
+              </h3>
+
+              <p className="text-sm text-muted-foreground mt-1">
+                Find clauses, agreements, obligations,
+                and contractual risks.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/50 backdrop-blur border-border/10">
+            <CardContent className="p-5">
+              <Users className="h-5 w-5 text-emerald-500 mb-3" />
+
+              <h3 className="font-semibold">
+                Suppliers
+              </h3>
+
+              <p className="text-sm text-muted-foreground mt-1">
+                Discover suppliers, categories,
+                countries, and risk information.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/50 backdrop-blur border-border/10">
+            <CardContent className="p-5">
+              <Newspaper className="h-5 w-5 text-amber-500 mb-3" />
+
+              <h3 className="font-semibold">
+                Market Intelligence
+              </h3>
+
+              <p className="text-sm text-muted-foreground mt-1">
+                Search relevant supply-chain and
+                procurement intelligence.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {hasSearched && (
-        <div className="space-y-4 mt-12">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Search Results</h2>
-          
+        <div className="space-y-5 mt-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Search Results
+              </h2>
+
+              {!searchMutation.isPending && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {results.length}{" "}
+                  {results.length === 1
+                    ? "result"
+                    : "results"}{" "}
+                  for "{query}"
+                </p>
+              )}
+            </div>
+
+            {!searchMutation.isPending &&
+              results.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                >
+                  Semantic Search
+                </Badge>
+              )}
+          </div>
+
           {searchMutation.isPending ? (
             <div className="space-y-4">
-              {[1,2,3].map(i => <Card key={i} className="h-32 bg-muted/10 animate-pulse border-border/5" />)}
+              {[1, 2, 3].map(
+                (item) => (
+                  <Card
+                    key={item}
+                    className="h-32 bg-muted/10 animate-pulse border-border/5"
+                  />
+                ),
+              )}
             </div>
-          ) : searchMutation.data?.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No results found for "{query}". Try adjusting your terminology.
-            </div>
+          ) : searchMutation.isError ? (
+            <Card className="bg-destructive/5 border-destructive/20">
+              <CardContent className="py-10 text-center">
+                <ShieldAlert className="h-8 w-8 text-destructive mx-auto mb-3" />
+
+                <h3 className="font-semibold">
+                  Search failed
+                </h3>
+
+                <p className="text-sm text-muted-foreground mt-1">
+                  The search service could not
+                  process this query. Please try
+                  again.
+                </p>
+              </CardContent>
+            </Card>
+          ) : results.length === 0 ? (
+            <Card className="bg-card/50 border-border/10">
+              <CardContent className="py-14 text-center">
+                <SearchIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+
+                <h3 className="font-semibold text-lg">
+                  No results found
+                </h3>
+
+                <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                  Nothing matched "{query}".
+                  Try using a broader supplier,
+                  contract, risk, or procurement
+                  term.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-4">
-              {searchMutation.data?.map(result => (
-                <Card key={result.id} className="bg-card/50 backdrop-blur border-border/10 hover:border-primary/30 transition-colors cursor-pointer group">
-                  <CardContent className="p-5">
-                    <div className="flex gap-4">
-                      <div className="mt-1 p-2 rounded-lg bg-muted/30 group-hover:bg-muted/50 transition-colors shrink-0">
-                        {getIconForType(result.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                          <h3 className="font-semibold text-base truncate pr-4 group-hover:text-primary transition-colors">{result.title}</h3>
-                          <Badge variant="outline" className="text-[10px] shrink-0 font-mono text-primary border-primary/20">
-                            SCORE: {result.score.toFixed(2)}
-                          </Badge>
+              {results.map(
+                (result) => (
+                  <Card
+                    key={result.id}
+                    className="bg-card/50 backdrop-blur border-border/10 hover:border-primary/30 transition-colors cursor-pointer group"
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex gap-4">
+                        <div className="mt-1 p-2.5 rounded-lg bg-muted/30 group-hover:bg-muted/50 transition-colors shrink-0">
+                          {getIconForType(
+                            result.type,
+                          )}
                         </div>
-                        <p className="text-sm text-foreground/80 leading-relaxed mt-2" dangerouslySetInnerHTML={{ __html: result.snippet.replace(/<em>/g, '<span class="text-primary bg-primary/10 px-1 rounded font-medium">').replace(/<\/em>/g, '</span>') }} />
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px]"
+                                >
+                                  {getTypeLabel(
+                                    result.type,
+                                  )}
+                                </Badge>
+                              </div>
+
+                              <h3 className="font-semibold text-base group-hover:text-primary transition-colors">
+                                {result.title}
+                              </h3>
+                            </div>
+
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] shrink-0 font-mono text-primary border-primary/20"
+                            >
+                              SCORE{" "}
+                              {Number(
+                                result.score,
+                              ).toFixed(2)}
+                            </Badge>
+                          </div>
+
+                          <p
+                            className="text-sm text-foreground/80 leading-relaxed mt-3"
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                result.snippet
+                                  .replace(
+                                    /<em>/g,
+                                    '<span class="text-primary bg-primary/10 px-1 rounded font-medium">',
+                                  )
+                                  .replace(
+                                    /<\/em>/g,
+                                    "</span>",
+                                  ),
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ),
+              )}
             </div>
           )}
         </div>

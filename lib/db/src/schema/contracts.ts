@@ -14,6 +14,8 @@ export const contractsTable = pgTable("contracts", {
   value: real("value").notNull().default(0),
   content: text("content"),
   summary: text("summary"),
+  missingClauses: text("missing_clauses"),
+  complianceIssues: text("compliance_issues"),
   riskScore: real("risk_score"),
   clauseCount: integer("clause_count"),
   riskyClauseCount: integer("risky_clause_count"),

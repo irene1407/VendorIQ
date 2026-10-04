@@ -1,88 +1,228 @@
-import { useGetDashboardSummary, useGetSpendTrends, useGetSupplierLeaderboard, useGetRiskHeatmap } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  useListRiskScores,
+  useListFraudAlerts,
+  useListCommodityForecasts,
+  useGetCommodityForecast,
+} from "@workspace/api-client-react";
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatPercent } from "@/lib/utils";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from "recharts";
-import { Users, ShieldAlert, TrendingDown, DollarSign, Activity, Truck, AlertTriangle, Bot, ShieldCheck, TrendingUp, FileText, Sparkles } from "lucide-react";
-import { motion } from "framer-motion";
-import { useEffect, useRef } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 
-const AGENT_ICON: Record<string, React.ReactNode> = {
-  risk_analyst:       <ShieldCheck className="h-4 w-4 text-destructive" />,
-  price_forecaster:   <TrendingUp className="h-4 w-4 text-primary" />,
-  contract_analyst:   <FileText className="h-4 w-4 text-blue-400" />,
-  fraud_investigator: <AlertTriangle className="h-4 w-4 text-amber-400" />,
-  procurement_copilot:<Sparkles className="h-4 w-4 text-emerald-400" />,
-};
+import {
+  ShieldAlert,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Users,
+  ShieldCheck,
+  ArrowRight,
+} from "lucide-react";
 
-function AnimatedCounter({ value, prefix = "", suffix = "", formatter = (v: number) => v.toString() }: { value: number, prefix?: string, suffix?: string, formatter?: (v: number) => string }) {
-  // Simplistic animation approach for demonstration
-  return <span>{prefix}{formatter(value)}{suffix}</span>;
+import {
+  BarChart,
+  Bar,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from "recharts";
+
+const USD_TO_INR = 95.9071;
+
+function formatINR(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
+function getRiskColor(level: string) {
+  switch (level.toLowerCase()) {
+    case "critical":
+      return "destructive";
+    case "high":
+      return "destructive";
+    case "medium":
+      return "warning";
+    default:
+      return "default";
+  }
 }
 
 export default function Dashboard() {
-  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary({
-    query: { refetchInterval: 5000 },
+  const {
+    data: riskResponse,
+    isLoading: isRiskLoading,
+  } = useListRiskScores();
+
+  const {
+    data: fraudResponse,
+    isLoading: isFraudLoading,
+  } = useListFraudAlerts({
+    status: "open",
   });
-  const { data: trends, isLoading: isTrendsLoading } = useGetSpendTrends({ months: 6 });
-  const { data: leaderboard, isLoading: isLeaderboardLoading } = useGetSupplierLeaderboard({ limit: 5 });
-  const { data: heatmap, isLoading: isHeatmapLoading } = useGetRiskHeatmap();
 
-  const mapRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    if (!mapRef.current || !heatmap || heatmap.length === 0) return;
-    
-    // Quick leaflet map init
-    const map = L.map(mapRef.current).setView([20, 0], 2);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
+  const {
+    data: commoditiesResponse,
+    isLoading: isCommoditiesLoading,
+  } = useListCommodityForecasts();
 
-    heatmap.forEach(point => {
-      const color = point.riskScore > 75 ? '#dc2626' : point.riskScore > 50 ? '#f59e0b' : '#10b981';
-      L.circleMarker([point.lat, point.lon], {
-        radius: Math.max(5, point.supplierCount * 2),
-        fillColor: color,
-        color: '#000',
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-      }).addTo(map).bindPopup(`${point.country}: ${point.supplierCount} suppliers<br>Avg Risk: ${point.riskScore.toFixed(1)}`);
-    });
+  const riskScores = Array.isArray(riskResponse)
+    ? riskResponse
+    : [];
 
-    return () => {
-      map.remove();
-    };
-  }, [heatmap]);
+  const fraudAlerts = Array.isArray(fraudResponse)
+    ? fraudResponse
+    : [];
+
+  const commodities = Array.isArray(
+    commoditiesResponse,
+  )
+    ? commoditiesResponse
+    : [];
+
+  const activeCommodity =
+    commodities[0]?.commodity === "Natural Gas"
+      ? "natural_gas_us"
+      : commodities[0]?.commodity
+          ?.toLowerCase()
+          .replace(/\s+/g, "_") ??
+        "natural_gas_us";
+
+  const {
+    data: forecastResponse,
+    isLoading: isForecastLoading,
+  } = useGetCommodityForecast(activeCommodity, {
+    query: {
+      queryKey: [
+        "dashboard-commodity-forecast",
+        activeCommodity,
+      ],
+      enabled: commodities.length > 0,
+    },
+  });
+
+  const forecast = forecastResponse as
+    | {
+        commodity?: string;
+        currentPrice?: number;
+        forecastPrice?: number;
+        changePercent?: number;
+        trend?: string;
+        unit?: string;
+      }
+    | undefined;
+
+  const totalSuppliers = riskScores.length;
+
+  const highRiskSuppliers = riskScores.filter(
+    (supplier) =>
+      supplier.riskLevel === "high" ||
+      supplier.riskLevel === "critical",
+  ).length;
+
+  const criticalSuppliers = riskScores.filter(
+    (supplier) =>
+      supplier.riskLevel === "critical",
+  ).length;
+
+  const averageRisk =
+    totalSuppliers > 0
+      ? riskScores.reduce(
+          (sum, supplier) =>
+            sum + Number(supplier.score ?? 0),
+          0,
+        ) / totalSuppliers
+      : 0;
+
+  const riskDistribution = [
+    {
+      level: "Low",
+      count: riskScores.filter(
+        (supplier) =>
+          supplier.riskLevel === "low",
+      ).length,
+    },
+    {
+      level: "Medium",
+      count: riskScores.filter(
+        (supplier) =>
+          supplier.riskLevel === "medium",
+      ).length,
+    },
+    {
+      level: "High",
+      count: riskScores.filter(
+        (supplier) =>
+          supplier.riskLevel === "high",
+      ).length,
+    },
+    {
+      level: "Critical",
+      count: criticalSuppliers,
+    },
+  ];
+
+  const topRiskSuppliers = [...riskScores]
+    .sort(
+      (a, b) =>
+        Number(b.score ?? 0) -
+        Number(a.score ?? 0),
+    )
+    .slice(0, 5);
+
+  const isLoading =
+    isRiskLoading ||
+    isFraudLoading ||
+    isCommoditiesLoading;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h1 className="text-3xl font-display font-bold tracking-tight mb-2">Executive Command Center</h1>
-        <p className="text-muted-foreground">Global procurement overview, real-time risk, and AI-driven intelligence.</p>
+        <h1 className="text-3xl font-display font-bold tracking-tight mb-2">
+          Executive Command Center
+        </h1>
+
+        <p className="text-muted-foreground">
+          Real-time procurement intelligence powered by supplier risk,
+          anomaly detection, and commodity forecasting.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-card/50 backdrop-blur border-border/10 overflow-hidden relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent pointer-events-none" />
+        <Card className="bg-card/50 backdrop-blur border-border/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Spend (YTD)</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium">
+              Suppliers Analyzed
+            </CardTitle>
+
+            <Users className="h-4 w-4 text-primary" />
           </CardHeader>
+
           <CardContent>
-            {isSummaryLoading ? (
-              <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+            {isRiskLoading ? (
+              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
             ) : (
               <>
-                <div className="text-2xl font-bold font-display">{formatCurrency(summary?.totalSpend || 0)}</div>
-                <p className="text-xs text-emerald-400 mt-1 flex items-center">
-                  <TrendingDown className="h-3 w-3 mr-1" />
-                  {summary?.totalSpendChange}% vs last year
+                <div className="text-3xl font-display font-bold">
+                  {totalSuppliers}
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-1">
+                  Risk-scored supplier portfolio
                 </p>
               </>
             )}
@@ -91,33 +231,25 @@ export default function Dashboard() {
 
         <Card className="bg-card/50 backdrop-blur border-border/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active Suppliers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isSummaryLoading ? (
-              <div className="h-8 w-16 bg-muted animate-pulse rounded" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold font-display">{summary?.activeSuppliers}</div>
-                <p className="text-xs text-muted-foreground mt-1">Across 42 countries</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+            <CardTitle className="text-sm font-medium">
+              High-Risk Suppliers
+            </CardTitle>
 
-        <Card className="bg-card/50 backdrop-blur border-border/10">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">High Risk Entities</CardTitle>
             <ShieldAlert className="h-4 w-4 text-destructive" />
           </CardHeader>
+
           <CardContent>
-            {isSummaryLoading ? (
-              <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+            {isRiskLoading ? (
+              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
             ) : (
               <>
-                <div className="text-2xl font-bold font-display text-destructive">{summary?.highRiskSuppliers}</div>
-                <p className="text-xs text-muted-foreground mt-1">Requires immediate review</p>
+                <div className="text-3xl font-display font-bold text-destructive">
+                  {highRiskSuppliers}
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-1">
+                  High + critical risk
+                </p>
               </>
             )}
           </CardContent>
@@ -125,218 +257,428 @@ export default function Dashboard() {
 
         <Card className="bg-card/50 backdrop-blur border-border/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Predicted Savings</CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium">
+              Active Anomalies
+            </CardTitle>
+
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
           </CardHeader>
+
           <CardContent>
-            {isSummaryLoading ? (
-              <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+            {isFraudLoading ? (
+              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
             ) : (
               <>
-                <div className="text-2xl font-bold font-display text-primary">{formatCurrency(summary?.predictedSavings || 0)}</div>
-                <p className="text-xs text-muted-foreground mt-1">Identified by AI agents</p>
+                <div className="text-3xl font-display font-bold text-amber-400">
+                  {fraudAlerts.length}
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-1">
+                  Vendors requiring investigation
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 backdrop-blur border-border/10">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Average Risk Score
+            </CardTitle>
+
+            <Activity className="h-4 w-4 text-primary" />
+          </CardHeader>
+
+          <CardContent>
+            {isRiskLoading ? (
+              <div className="h-8 w-20 bg-muted/20 animate-pulse rounded" />
+            ) : (
+              <>
+                <div className="text-3xl font-display font-bold">
+                  {averageRisk.toFixed(1)}
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-1">
+                  Across the analyzed portfolio
+                </p>
               </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 bg-card/50 backdrop-blur border-border/10">
+      <div className="grid gap-6 lg:grid-cols-7">
+        <Card className="lg:col-span-4 bg-card/50 backdrop-blur border-border/10">
           <CardHeader>
-            <CardTitle>Spend vs Budget Forecast</CardTitle>
+            <CardTitle>
+              Supplier Risk Distribution
+            </CardTitle>
+
+            <CardDescription>
+              Current ML-generated supplier risk levels
+            </CardDescription>
           </CardHeader>
-          <CardContent className="pl-0">
-            {isTrendsLoading ? (
-              <div className="h-[300px] w-full bg-muted/20 animate-pulse rounded-md ml-4" />
+
+          <CardContent>
+            {isRiskLoading ? (
+              <div className="h-[300px] bg-muted/20 animate-pulse rounded-md" />
             ) : (
-              <div className="h-[300px] w-full mt-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trends} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorBudget" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))" 
-                      fontSize={12} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      tickFormatter={(value) => `₹${(value / 1_00_00_000).toFixed(0)}Cr`}
+              <div className="h-[300px]">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <BarChart
+                    data={riskDistribution}
+                    margin={{
+                      top: 20,
+                      right: 20,
+                      left: 0,
+                      bottom: 10,
+                    }}
+                  >
+                    <XAxis
+                      dataKey="level"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
                     />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                      formatter={(value: number) => formatCurrency(value)}
+
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
                     />
-                    <Area type="monotone" dataKey="budget" stroke="hsl(var(--muted-foreground))" fillOpacity={1} fill="url(#colorBudget)" />
-                    <Area type="monotone" dataKey="spend" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorSpend)" />
-                  </AreaChart>
+
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor:
+                          "hsl(var(--card))",
+                        borderColor:
+                          "hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+
+                    <Bar
+                      dataKey="count"
+                      fill="hsl(var(--primary))"
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="col-span-3 bg-card/50 backdrop-blur border-border/10">
+        <Card className="lg:col-span-3 bg-card/50 backdrop-blur border-border/10">
           <CardHeader>
-            <CardTitle>Global Risk Heatmap</CardTitle>
+            <CardTitle>
+              Commodity Outlook
+            </CardTitle>
+
+            <CardDescription>
+              Latest ML forecast
+            </CardDescription>
           </CardHeader>
+
           <CardContent>
-            {isHeatmapLoading ? (
-              <div className="h-[300px] w-full bg-muted/20 animate-pulse rounded-md" />
+            {isForecastLoading ||
+            isCommoditiesLoading ? (
+              <div className="space-y-4">
+                <div className="h-8 w-40 bg-muted/20 animate-pulse rounded" />
+                <div className="h-16 bg-muted/20 animate-pulse rounded" />
+                <div className="h-12 bg-muted/20 animate-pulse rounded" />
+              </div>
+            ) : forecast ? (
+              <div className="space-y-6">
+                <div>
+                  <div className="text-lg font-semibold">
+                    {forecast.commodity ??
+                      "Commodity"}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    {forecast.unit ??
+                      "USD / unit"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-3xl font-display font-bold">
+                    {formatINR(
+                      Number(
+                        forecast.currentPrice ??
+                          0,
+                      ) * USD_TO_INR,
+                    )}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Latest observed price
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/20 p-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground">
+                      Forecast
+                    </div>
+
+                    <div className="font-semibold">
+                      {formatINR(
+                        Number(
+                          forecast.forecastPrice ??
+                            0,
+                        ) * USD_TO_INR,
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className={`flex items-center gap-1 font-semibold ${
+                      Number(
+                        forecast.changePercent ??
+                          0,
+                      ) >= 0
+                        ? "text-emerald-400"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {Number(
+                      forecast.changePercent ??
+                        0,
+                    ) >= 0 ? (
+                      <TrendingUp className="h-4 w-4" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4" />
+                    )}
+
+                    {Number(
+                      forecast.changePercent ??
+                        0,
+                    ) >= 0
+                      ? "+"
+                      : ""}
+                    {Number(
+                      forecast.changePercent ??
+                        0,
+                    ).toFixed(2)}
+                    %
+                  </div>
+                </div>
+
+                <Badge variant="outline">
+                  {forecast.trend
+                    ? `${forecast.trend.toUpperCase()} TREND`
+                    : "ML FORECAST"}
+                </Badge>
+              </div>
             ) : (
-              <div className="h-[300px] w-full rounded-md overflow-hidden border border-border/20 relative">
-                <div ref={mapRef} className="absolute inset-0 z-0 bg-[#0a0a0a]" />
+              <div className="text-muted-foreground">
+                Forecast data unavailable.
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 bg-card/50 backdrop-blur border-border/10">
-          <CardHeader>
-            <CardTitle>Top Performing Suppliers</CardTitle>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="bg-card/50 backdrop-blur border-border/10">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>
+                Highest-Risk Suppliers
+              </CardTitle>
+
+              <CardDescription>
+                Suppliers currently requiring the most attention
+              </CardDescription>
+            </div>
+
+            <ShieldCheck className="h-5 w-5 text-destructive" />
           </CardHeader>
+
           <CardContent>
-            {isLeaderboardLoading ? (
-              <div className="space-y-4">
-                {[1,2,3,4,5].map(i => <div key={i} className="h-12 bg-muted/20 animate-pulse rounded-md" />)}
+            {isRiskLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map(
+                  (item) => (
+                    <div
+                      key={item}
+                      className="h-14 bg-muted/20 animate-pulse rounded-md"
+                    />
+                  ),
+                )}
+              </div>
+            ) : topRiskSuppliers.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No risk data available.
               </div>
             ) : (
-              <div className="space-y-4">
-                {leaderboard?.map((supplier, i) => (
-                  <div key={supplier.supplierId} className="flex items-center justify-between p-3 rounded-lg bg-card border border-border/5 hover:border-primary/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold text-sm text-muted-foreground">
-                        #{supplier.rank}
-                      </div>
-                      <div>
-                        <div className="font-medium">{supplier.name}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          <span>{supplier.category}</span>
-                          <span>•</span>
-                          <span>{supplier.country}</span>
+              <div className="space-y-3">
+                {topRiskSuppliers.map(
+                  (supplier, index) => (
+                    <div
+                      key={
+                        supplier.supplierId ??
+                        index
+                      }
+                      className="flex items-center justify-between rounded-lg border border-border/10 bg-muted/10 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                          {index + 1}
+                        </div>
+
+                        <div>
+                          <div className="font-medium">
+                            {supplier.supplierName}
+                          </div>
+
+                          <div className="text-xs text-muted-foreground">
+                            {supplier.riskLevel
+                              ?.toUpperCase() ??
+                              "UNKNOWN"}
+                          </div>
                         </div>
                       </div>
+
+                      <Badge
+                        variant={
+                          getRiskColor(
+                            supplier.riskLevel ??
+                              "low",
+                          ) as any
+                        }
+                      >
+                        {Number(
+                          supplier.score ?? 0,
+                        ).toFixed(1)}
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="font-display font-bold text-primary">{supplier.score}</div>
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Score</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ),
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="col-span-3 bg-card/50 backdrop-blur border-border/10">
-          <CardHeader>
-            <CardTitle>AI Insights</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 relative overflow-hidden group cursor-pointer">
-                <div className="absolute inset-0 bg-gradient-to-r from-destructive/0 via-destructive/5 to-destructive/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                <div className="flex gap-3">
-                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-medium text-destructive">Anomaly Detected</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Unusual invoice velocity from TechLogistics Inc. 340% increase over 30-day baseline.
-                    </p>
-                  </div>
-                </div>
-              </div>
+        <Card className="bg-card/50 backdrop-blur border-border/10">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>
+                Active Anomaly Queue
+              </CardTitle>
 
-              <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 relative overflow-hidden group cursor-pointer">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                <div className="flex gap-3">
-                  <TrendingDown className="h-5 w-5 text-primary shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-medium text-primary">Price Opportunity</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Silicon Wafer commodity futures indicate a 12% price drop in Q3. Delay bulk orders.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 relative overflow-hidden group cursor-pointer">
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/5 to-emerald-500/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                <div className="flex gap-3">
-                  <ShieldAlert className="h-5 w-5 text-emerald-500 shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-medium text-emerald-500">Risk Mitigated</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Alternative supplier found for constrained European routes. Projected savings: ₹3.5Cr.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <CardDescription>
+                Highest-scoring vendor anomalies
+              </CardDescription>
             </div>
+
+            <AlertTriangle className="h-5 w-5 text-amber-400" />
+          </CardHeader>
+
+          <CardContent>
+            {isFraudLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map(
+                  (item) => (
+                    <div
+                      key={item}
+                      className="h-14 bg-muted/20 animate-pulse rounded-md"
+                    />
+                  ),
+                )}
+              </div>
+            ) : fraudAlerts.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No active anomalies.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {fraudAlerts
+                  .slice(0, 5)
+                  .map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="flex items-center justify-between rounded-lg border border-border/10 bg-muted/10 p-3"
+                    >
+                      <div>
+                        <div className="font-medium">
+                          {alert.supplierName}
+                        </div>
+
+                        <div className="text-xs text-muted-foreground">
+                          {alert.type
+                            .split("_")
+                            .map(
+                              (word) =>
+                                word
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                word.slice(1),
+                            )
+                            .join(" ")}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <Badge
+                          variant={
+                            getRiskColor(
+                              alert.severity,
+                            ) as any
+                          }
+                        >
+                          {alert.severity.toUpperCase()}
+                        </Badge>
+
+                        <span className="font-mono text-xs">
+                          {alert.anomalyScore?.toFixed(
+                            2,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card className="bg-card/50 backdrop-blur border-border/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>AI Agent Activity</CardTitle>
-          <span className="text-xs text-muted-foreground">
-            {summary?.agentActivity?.filter((a) => a.status === "running").length ?? 0} of{" "}
-            {summary?.agentActivity?.length ?? 5} running
-          </span>
-        </CardHeader>
-        <CardContent>
-          {isSummaryLoading ? (
-            <div className="grid gap-3 md:grid-cols-5">
-              {Array(5).fill(0).map((_, i) => (
-                <div key={i} className="h-20 bg-muted/20 animate-pulse rounded-md" />
-              ))}
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="font-semibold">
+                VendorIQ Intelligence Stack
+              </div>
+
+              <div className="text-sm text-muted-foreground mt-1">
+                Risk ML + commodity forecasting + vendor anomaly detection
+              </div>
             </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-5">
-              {summary?.agentActivity?.map((agent) => (
-                <div
-                  key={agent.id}
-                  className={`p-3 rounded-lg border text-xs flex flex-col gap-1.5 ${
-                    agent.status === "running"
-                      ? "border-primary/40 bg-primary/5"
-                      : "border-border/10 bg-muted/10"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    {AGENT_ICON[agent.type] ?? <Bot className="h-4 w-4 text-muted-foreground" />}
-                    <Badge
-                      variant={agent.status === "running" ? "default" : "outline"}
-                      className="text-[9px] px-1.5 py-0"
-                    >
-                      {agent.status.toUpperCase()}
-                    </Badge>
-                  </div>
-                  <div className="font-medium text-foreground truncate">{agent.name}</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">
-                    {agent.tasksCompleted.toLocaleString()} tasks
-                  </div>
-                  {agent.status === "running" && agent.currentTask && (
-                    <div className="text-[10px] text-primary/80 italic truncate">
-                      {agent.currentTask}
-                    </div>
-                  )}
-                </div>
-              ))}
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">
+                Risk ML
+              </Badge>
+
+              <Badge variant="outline">
+                XGBoost Forecast
+              </Badge>
+
+              <Badge variant="outline">
+                Isolation Forest
+              </Badge>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>

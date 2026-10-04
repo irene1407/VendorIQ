@@ -6,16 +6,55 @@ import { ShieldAlert, AlertTriangle, ShieldCheck, ArrowRight } from "lucide-reac
 import { useState } from "react";
 
 export default function Risk() {
-  const { data: scores, isLoading: isScoresLoading } = useListRiskScores({ limit: 10 } as any); // Using type cast as API params might not have limit
+  const {
+    data: scoresResponse,
+    isLoading: isScoresLoading,
+  } = useListRiskScores({ limit: 10 } as any);
+
+  const scores = Array.isArray(scoresResponse) ? scoresResponse : [];
+
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
   // Default to first supplier if none selected
-  const activeSupplierId = selectedSupplierId || (scores && scores.length > 0 ? scores[0].supplierId : 'SUP-001');
+  const activeSupplierId =
+    selectedSupplierId ||
+    (scores.length > 0 ? scores[0].supplierId : "SUP-001");
 
-  const { data: history, isLoading: isHistoryLoading } = useGetSupplierRiskHistory(activeSupplierId, { query: { enabled: !!activeSupplierId } });
-  const { data: explanation, isLoading: isExplanationLoading } = useGetRiskExplanation(activeSupplierId, { query: { enabled: !!activeSupplierId } });
-  const { data: counterfactuals, isLoading: isCounterfactualsLoading } = useGetRiskCounterfactuals(activeSupplierId, { query: { enabled: !!activeSupplierId } });
+  const {
+    data: historyResponse,
+    isLoading: isHistoryLoading,
+  } = useGetSupplierRiskHistory(activeSupplierId, {
+    query: {
+      queryKey: ["supplier-risk-history", activeSupplierId],
+      enabled: !!activeSupplierId,
+    },
+  });
 
+  const history = Array.isArray(historyResponse) ? historyResponse : [];
+
+  const {
+    data: explanation,
+    isLoading: isExplanationLoading,
+  } = useGetRiskExplanation(activeSupplierId, {
+    query: {
+      queryKey: ["risk-explanation", activeSupplierId],
+      enabled: !!activeSupplierId,
+    },
+  });
+
+  const {
+    data: counterfactualsResponse,
+    isLoading: isCounterfactualsLoading,
+  } = useGetRiskCounterfactuals(activeSupplierId, {
+    query: {
+      queryKey: ["risk-counterfactuals", activeSupplierId],
+      enabled: !!activeSupplierId,
+    },
+  });
+
+  const counterfactuals = Array.isArray(counterfactualsResponse)
+    ? counterfactualsResponse
+    : [];
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
@@ -34,7 +73,7 @@ export default function Risk() {
             {isScoresLoading ? (
               Array(8).fill(0).map((_, i) => <div key={i} className="h-16 bg-muted/20 animate-pulse rounded-md" />)
             ) : (
-              scores?.map(score => (
+              scores.map(score => (
                 <div 
                   key={score.supplierId} 
                   onClick={() => setSelectedSupplierId(score.supplierId)}
@@ -114,7 +153,7 @@ export default function Risk() {
                   <div className="h-[250px] w-full bg-muted/20 animate-pulse rounded-md" />
                 ) : (
                   <div className="space-y-4 mt-2">
-                    {explanation?.shapValues.map(feature => (
+                    {(explanation?.shapValues ?? []).map(feature => (
                       <div key={feature.feature} className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="font-medium text-muted-foreground">{feature.feature}</span>
