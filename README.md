@@ -761,31 +761,108 @@ http://localhost:5173
 
 ---
 
+---
+
 # Screenshots
 
-## Dashboard
+Explore VendorIQ's procurement intelligence platform through the following feature previews.
 
-![VendorIQ Dashboard](docs/screenshots/dashboard.png)
+## Dashboard & Executive Intelligence
 
-## Vendor Risk Intelligence
+The central dashboard provides an overview of procurement intelligence and supplier operations.
 
-![Vendor Risk Intelligence](docs/screenshots/risk.png)
+<p align="center">
+  <img src="docs/screenshots/dashboard(1).png" alt="VendorIQ Main Dashboard" width="48%">
+  <img src="docs/screenshots/dashboard(2).png" alt="VendorIQ Executive Dashboard" width="48%">
+</p>
 
-## Commodity Forecasting
+## Command Centre
 
-![Commodity Forecasting](docs/screenshots/forecast.png)
+Monitor procurement operations through the command centre interface.
+
+<p align="center">
+  <img src="docs/screenshots/commandcentre1.png" alt="VendorIQ Command Centre 1" width="48%">
+  <img src="docs/screenshots/commandcentre2.png" alt="VendorIQ Command Centre 2" width="48%">
+</p>
+
+## Supplier Intelligence
+
+Review supplier risk and supplier registry information.
+
+<p align="center">
+  <img src="docs/screenshots/risk.png" alt="Supplier Risk Intelligence" width="48%">
+  <img src="docs/screenshots/supplierregistry.png" alt="Supplier Registry" width="48%">
+</p>
+
+## Fraud Detection
+
+Investigate supplier anomalies and review fraud-related alerts.
+
+<p align="center">
+  <img src="docs/screenshots/fraud.png" alt="Fraud Detection Dashboard" width="48%">
+  <img src="docs/screenshots/fraud1.png" alt="Fraud Investigation View" width="48%">
+</p>
+
+## Market News & Intelligence
+
+Track procurement-related news and market developments.
+
+<p align="center">
+  <img src="docs/screenshots/marketnews.png" alt="Market News Dashboard" width="48%">
+  <img src="docs/screenshots/marketnews1.png" alt="Market News Analysis" width="48%">
+</p>
+
+## AI Agent
+
+Explore the AI agent interface for procurement-related assistance.
+
+<p align="center">
+  <img src="docs/screenshots/AIagent.png" alt="VendorIQ AI Agent" width="75%">
+</p>
+
+## Knowledge Graph
+
+Visualize relationships and connections across procurement intelligence data.
+
+<p align="center">
+  <img src="docs/screenshots/knowledgegraph.png" alt="VendorIQ Knowledge Graph" width="75%">
+</p>
 
 ## Contract Intelligence
 
-![Contract Intelligence](docs/screenshots/contracts.png)
+Access contract-related intelligence and information.
 
-## Market Intelligence
+<p align="center">
+  <img src="docs/screenshots/contract.png" alt="Contract Intelligence" width="75%">
+</p>
 
-![Market Intelligence](docs/screenshots/market.png)
+## Predictive Intelligence
 
-## What-If Simulator
+### Price Intelligence
 
-![What-If Simulator](docs/screenshots/simulator.png)
+<p align="center">
+  <img src="docs/screenshots/price.png" alt="Price Intelligence" width="75%">
+</p>
+
+### What-If Simulator
+
+<p align="center">
+  <img src="docs/screenshots/whatifsimulator.png" alt="What-If Simulation" width="75%">
+</p>
+
+## Experiment Tracking
+
+<p align="center">
+  <img src="docs/screenshots/experimenttracker.png" alt="Experiment Tracker" width="75%">
+</p>
+
+## Model Health
+
+<p align="center">
+  <img src="docs/screenshots/modelhealth.png" alt="Model Health Monitoring" width="75%">
+</p>
+
+---
 
 ---
 
